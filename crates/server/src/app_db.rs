@@ -9,8 +9,7 @@ use tracing::debug;
 
 use crate::error::{AppResult, IntoTransactionError};
 use crate::{AppConfig, DbConfig};
-use common::events::account::*;
-use common::events::*;
+use common::events::{self, account};
 use common::traits::*;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -71,12 +70,13 @@ impl AccountStore {
 }
 
 impl EventProcessor for AccountStore {
-    type Event = AccountEvent;
+    type Event = account::ServerEvent;
     type EventId = IVec;
-    type Effect = AccountEffect;
+    type Effect = account::ServerEffect;
     type EventStore = AppEventStore;
     type Result<T> = AppResult<T>;
 
+    #[tracing::instrument(name = "AccountStore.process_event", skip_all)]
     fn process_event(
         &self,
         event_id: &Self::EventId,
@@ -88,17 +88,17 @@ impl EventProcessor for AccountStore {
                 let mut effects: Vec<Self::Effect> = Vec::new();
 
                 match event {
-                    AccountEvent::SignIn { username, password } => {
+                    account::ServerEvent::SignIn { username, password } => {
                         let success = self.sign_in(username, password, tx_accounts).tx()?;
                         if success {
-                            effects.push(AccountEffect::SignInSuccess);
+                            effects.push(account::ServerEffect::SignInSuccess);
                         } else {
-                            effects.push(AccountEffect::SignInFailed);
+                            effects.push(account::ServerEffect::SignInFailed);
                         }
                     }
-                    AccountEvent::Register { username, password } => {
+                    account::ServerEvent::Register { username, password } => {
                         self.register(username, password, tx_accounts).tx()?;
-                        effects.push(AccountEffect::RegistrationOk);
+                        effects.push(account::ServerEffect::RegistrationOk);
                     }
                 }
 
@@ -145,7 +145,7 @@ impl AppEventStore {
 
 impl EventStore for AppEventStore {
     type EventId = IVec;
-    type Event = AppEvent;
+    type Event = events::ServerEvent;
     type Result<T> = AppResult<T>;
 
     fn write_event(&self, ev: &Self::Event) -> AppResult<IVec> {
@@ -178,7 +178,7 @@ impl EventStore for AppEventStore {
 
         Ok(iter.map(|item| {
             let (key, value) = item?;
-            let event = postcard::from_bytes::<AppEvent>(&value)?;
+            let event = postcard::from_bytes::<events::ServerEvent>(&value)?;
             Ok((key, event))
         }))
     }
@@ -217,12 +217,13 @@ impl AppDb {
 }
 
 impl EventProcessor for AppDb {
-    type Event = AppEvent;
+    type Event = events::ServerEvent;
     type EventId = IVec;
-    type Effect = AppEffect;
+    type Effect = events::ServerEffect;
     type EventStore = AppEventStore;
     type Result<T> = AppResult<T>;
 
+    #[tracing::instrument(name = "AppDb.process_event", skip_all)]
     fn process_event(
         &self,
         event_id: &Self::EventId,
@@ -230,11 +231,11 @@ impl EventProcessor for AppDb {
         store: &AppEventStore,
     ) -> AppResult<Vec<Self::Effect>> {
         let effects = match event {
-            AppEvent::AccountEvent(account_event) => self
+            events::ServerEvent::Account(account_event) => self
                 .account_store
                 .process_event(event_id, account_event, store)?
                 .into_iter()
-                .map(AppEffect::AccountEffect)
+                .map(events::ServerEffect::Account)
                 .collect(),
         };
 

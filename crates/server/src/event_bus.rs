@@ -15,7 +15,7 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-type WaiterMap = HashMap<IVec, oneshot::Sender<Vec<AppEffect>>>;
+type WaiterMap = HashMap<IVec, oneshot::Sender<Vec<ServerEffect>>>;
 
 pub struct EventBus {
     pub waiters: Mutex<WaiterMap>,
@@ -34,10 +34,11 @@ impl EventBus {
 
     pub fn submit(
         &self,
-        event: &AppEvent,
+        event: &ServerEvent,
         db: &AppDb,
-    ) -> AppResult<oneshot::Receiver<Vec<AppEffect>>> {
+    ) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
         let event_id = db.event_store.write_event(event)?;
+        let _span = tracing::info_span!("event_bus.submit").entered();
         let (sender, receiver) = oneshot::channel();
 
         self.waiters
@@ -79,7 +80,10 @@ impl EventBus {
 
             for event in db.event_store.unprocessed_events()? {
                 let (event_id, event) = event?;
-                let effects = db.process_event(&event_id, &event, &db.event_store)?;
+                let effects = {
+                    let _span = tracing::info_span!("event_loop.process").entered();
+                    db.process_event(&event_id, &event, &db.event_store)?
+                };
 
                 // Unblock waiter
                 let waiter = match self

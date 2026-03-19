@@ -34,8 +34,8 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
 
 pub async fn dispatch_event(
     app_state: &Arc<AppState>,
-    event: AppEvent,
-) -> AppResult<Vec<AppEffect>> {
+    event: ServerEvent,
+) -> AppResult<Vec<ServerEffect>> {
     let receiver = app_state.event_bus.submit(&event, &app_state.db)?;
     let effects = receiver.await.map_err(|_| AppError::EffectChannelClosed)?;
     Ok(effects)

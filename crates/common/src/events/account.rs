@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use veil::Redact;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum AccountEvent {
-    Register { username: String, password: String },
-    SignIn { username: String, password: String },
+#[derive(Serialize, Deserialize, Redact)]
+pub enum ServerEvent {
+    Register { username: String, #[redact] password: String },
+    SignIn { username: String, #[redact] password: String },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum AccountEffect {
+pub enum ServerEffect {
     RegistrationOk,
     SignInFailed,
     SignInSuccess,

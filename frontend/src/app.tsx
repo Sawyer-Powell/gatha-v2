@@ -1,27 +1,18 @@
 import { deepSignal } from "deepsignal";
-import init, { EventBus } from "./wasm/client";
+import init, { EventBus, type AppStore } from "./wasm/client";
 
 await init();
 
-interface AccountForm {
-  username: string;
-  password: string;
-}
-
-interface AppState {
-  form: AccountForm;
-}
-
-const state = deepSignal<AppState>({
-  form: { username: "", password: "" },
+const state = deepSignal<AppStore>({
+  account: { username: "", password: "", sign_in_status: "Ready" },
 });
 
-function applyDiff(diff: Partial<AppState>) {
-  if (diff.form) {
-    for (const [key, value] of Object.entries(diff.form)) {
-      if (value != null) {
-        (state.form as any)[key] = value;
-      }
+function applyDiff(diff: any, target: any = state) {
+  for (const [key, value] of Object.entries(diff)) {
+    if (value != null && typeof value === "object" && !Array.isArray(value)) {
+      applyDiff(value, target[key]);
+    } else if (value != null && value !== "NoChange") {
+      target[key] = value;
     }
   }
 }
@@ -32,27 +23,43 @@ export function App() {
   return (
     <section id="center">
       <h1>Gatha</h1>
-      <h1>{state.form.$username}</h1>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
+      <h1>STATUS: {state.account.$sign_in_status}</h1>
+      <h1>{state.account.$username}</h1>
+      <h1>{state.account.$password}</h1>
+      <input
+        type="text"
+        placeholder="Username"
+        value={state.account.username}
+        onInput={(e) =>
+          bus.dispatch({
+            Account: {
+              UsernameChanged: e.currentTarget.value,
+            },
+          })
+        }
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={state.account.password}
+        onInput={(e) =>
+          bus.dispatch({
+            Account: {
+              PasswordChanged: e.currentTarget.value,
+            },
+          })
+        }
+      />
+      <button
+        type="submit"
+        onClick={() =>
+          bus.dispatch({
+            Account: "SignInButtonClicked",
+          })
+        }
       >
-        <input
-          type="text"
-          placeholder="Username"
-          value={state.form.username}
-          onInput={(e) =>
-            bus.dispatch({ Form: { UpdateUsername: e.currentTarget.value } })
-          }
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={state.form.password}
-        />
-        <button type="submit">Sign In</button>
-      </form>
+        Sign In
+      </button>
     </section>
   );
 }

@@ -27,23 +27,62 @@ pub struct AppState {
     pub event_bus: EventBus,
 }
 
+#[tracing::instrument(skip(state))]
 async fn handle_event(
     State(state): State<Arc<AppState>>,
-    Json(event): Json<AppEvent>,
-) -> AppResult<Json<Vec<AppEffect>>> {
+    Json(event): Json<ServerEvent>,
+) -> AppResult<Json<Vec<ServerEffect>>> {
     let receiver = tokio::task::block_in_place(|| state.event_bus.submit(&event, &state.db))?;
     let effects = receiver.await.map_err(|_| AppError::EffectChannelClosed)?;
     Ok(Json(effects))
 }
 
+fn init_tracing() {
+    use opentelemetry::trace::TracerProvider;
+    use opentelemetry_otlp::WithExportConfig;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint("http://localhost:4317")
+        .build()
+        .expect("failed to create OTLP exporter");
+
+    let resource = opentelemetry_sdk::Resource::builder()
+        .with_service_name("gatha-server")
+        .build();
+
+    let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(otlp_exporter)
+        .with_batch_config(
+            opentelemetry_sdk::trace::BatchConfigBuilder::default()
+                .with_scheduled_delay(std::time::Duration::from_millis(500))
+                .build(),
+        )
+        .build();
+
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_span_processor(batch_processor)
+        .with_resource(resource)
+        .build();
+
+    let tracer = tracer_provider.tracer("gatha-server");
+    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    let fmt_layer = tracing_subscriber::fmt::layer();
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "server=debug".parse().unwrap());
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(otel_layer)
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "gatha_v2=debug".parse().unwrap()),
-        )
-        .init();
+    init_tracing();
 
     let config = AppConfig {
         db: DbConfig::Temporary,
@@ -66,7 +105,10 @@ async fn main() -> AppResult<()> {
         .route("/ev", post(handle_event))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.set_reuseaddr(true).unwrap();
+    socket.bind("0.0.0.0:3000".parse().unwrap()).unwrap();
+    let listener = socket.listen(1024).unwrap();
     println!("Listening on 0.0.0.0:3000");
     axum::serve(listener, app).await.unwrap();
 
@@ -75,11 +117,9 @@ async fn main() -> AppResult<()> {
 
 #[cfg(test)]
 mod test {
-    use common::events::account::{AccountEffect, AccountEvent};
+    use common::events::{ServerEffect, ServerEvent, account};
 
     use crate::testing::{dispatch_event, spin_up};
-
-    use super::*;
 
     #[tokio::test]
     async fn test_register_and_sign_in() {
@@ -87,7 +127,7 @@ mod test {
 
         let effects = dispatch_event(
             &state,
-            AppEvent::AccountEvent(AccountEvent::Register {
+            ServerEvent::Account(account::ServerEvent::Register {
                 username: "alice".into(),
                 password: "password123".into(),
             }),
@@ -98,7 +138,7 @@ mod test {
         assert_eq!(effects.len(), 1);
         assert!(matches!(
             effects[0],
-            AppEffect::AccountEffect(AccountEffect::RegistrationOk)
+            ServerEffect::Account(account::ServerEffect::RegistrationOk)
         ));
     }
 }
