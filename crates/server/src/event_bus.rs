@@ -15,7 +15,8 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-type WaiterMap = HashMap<IVec, oneshot::Sender<Vec<ServerEffect>>>;
+type Waiter = (oneshot::Sender<Vec<ServerEffect>>, tracing::Span);
+type WaiterMap = HashMap<IVec, Waiter>;
 
 pub struct EventBus {
     pub waiters: Mutex<WaiterMap>,
@@ -38,13 +39,13 @@ impl EventBus {
         db: &AppDb,
     ) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
         let event_id = db.event_store.write_event(event)?;
-        let _span = tracing::info_span!("event_bus.submit").entered();
         let (sender, receiver) = oneshot::channel();
+        let caller_span = tracing::Span::current();
 
         self.waiters
             .lock()
             .map_err(|e| AppError::PoisonedLock(e.to_string()))?
-            .insert(event_id.clone(), sender);
+            .insert(event_id.clone(), (sender, caller_span));
 
         *self
             .latest_event_id
@@ -80,19 +81,15 @@ impl EventBus {
 
             for event in db.event_store.unprocessed_events()? {
                 let (event_id, event) = event?;
-                let effects = {
-                    let _span = tracing::info_span!("event_loop.process").entered();
-                    db.process_event(&event_id, &event, &db.event_store)?
-                };
 
-                // Unblock waiter
-                let waiter = match self
+                // Retrieve waiter and caller span
+                let (waiter, caller_span) = match self
                     .waiters
                     .lock()
                     .map_err(|e| AppError::PoisonedLock(e.to_string()))?
                     .remove(&event_id)
                 {
-                    Some(waiter) => waiter,
+                    Some(w) => w,
                     None => {
                         warn!(
                             "Could not find event id in EventBus waiters: {:?}",
@@ -100,6 +97,12 @@ impl EventBus {
                         );
                         continue;
                     }
+                };
+
+                // Process under the caller's span so it appears in the same trace
+                let effects = {
+                    let _span = tracing::info_span!(parent: &caller_span, "event_loop.process").entered();
+                    db.process_event(&event_id, &event, &db.event_store)?
                 };
 
                 // Send message over our waiter
