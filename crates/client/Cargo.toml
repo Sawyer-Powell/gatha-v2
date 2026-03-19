@@ -17,3 +17,7 @@ wasm-bindgen-futures = "0.4.64"
 web-sys = { version = "0.3", features = ["console"] }
 futures = "0.3.32"
 tsify-next = { version = "0.5", features = ["js"] }
+diff-struct = "0.5.3"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

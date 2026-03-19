@@ -1,155 +1,156 @@
-use std::{cell::RefCell, rc::Rc};
-
-use common::events::{
-    AppEffect, AppEvent,
-    account::{AccountEffect, AccountEvent},
-};
+use diff::Diff;
 use futures::{StreamExt, channel::mpsc};
-use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use tsify_next::Tsify;
+use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::{js_sys, spawn_local};
+use wasm_bindgen_futures::js_sys;
+use wasm_bindgen_futures::spawn_local;
 
-#[derive(Serialize, Clone, Copy, PartialEq)]
-pub enum SignInStatus {
-    Ready,
-    Processing,
-    Success,
-    Failed,
+trait Reducer: Serialize + Default + Clone + Diff {
+    type Event;
+    async fn process_event(
+        &self,
+        event: Self::Event,
+        mutate: &dyn Fn(&Self, &dyn Fn(&mut Self)) -> Self,
+    ) -> Self;
 }
 
-impl Default for SignInStatus {
-    fn default() -> Self {
-        Self::Ready
-    }
+trait Store: Serialize + Default + Clone + Diff {
+    type Event;
+    async fn process_event(
+        &mut self,
+        event: Self::Event,
+        on_change: &dyn Fn(&<Self as Diff>::Repr),
+    );
 }
 
-#[derive(Serialize, Clone, Default)]
-pub struct AccountState {
+#[derive(Serialize, Clone, Default, Diff, PartialEq)]
+#[diff(attr(
+    #[derive(Serialize, Clone, Debug)]
+))]
+pub struct AccountForm {
     pub username: String,
     pub password: String,
-    pub sign_in: SignInStatus,
 }
 
-impl AccountState {
-    async fn process_event(&mut self, event: UIEvent, notify: &dyn Fn(&AccountState)) {
+impl Reducer for AccountForm {
+    type Event = FormEvent;
+
+    async fn process_event(
+        &self,
+        event: Self::Event,
+        mutate: &dyn Fn(&Self, &dyn Fn(&mut Self)) -> Self,
+    ) -> Self {
         match event {
-            UIEvent::UsernameUpdate(username) => {
-                self.username = username;
-                notify(self);
-            }
-            UIEvent::PasswordUpdate(password) => {
-                self.password = password;
-                notify(self);
-            }
-            UIEvent::SignInButtonClick => {
-                self.sign_in(notify).await;
-            }
+            FormEvent::UpdateUsername(username) => mutate(self, &|state| {
+                state.username = username.clone();
+            }),
         }
     }
+}
 
-    async fn sign_in(&mut self, notify: &dyn Fn(&AccountState)) {
-        if self.sign_in != SignInStatus::Ready && self.sign_in != SignInStatus::Failed {
-            return;
-        }
+#[derive(Serialize, Clone, Default, Diff, PartialEq)]
+#[diff(attr(
+    #[derive(Serialize, Clone, Debug)]
+))]
+pub struct AppStore {
+    form: AccountForm,
+}
 
-        self.sign_in = SignInStatus::Processing;
-        notify(self);
-
-        let effects = match dispatch_to_server(AppEvent::AccountEvent(AccountEvent::SignIn {
-            username: self.username.clone(),
-            password: self.password.clone(),
-        }))
-        .await
-        {
-            Ok(effects) => effects,
-            Err(_) => {
-                self.sign_in = SignInStatus::Failed;
-                notify(self);
-                return;
-            }
-        };
-
-        for effect in effects {
-            match effect {
-                AppEffect::AccountEffect(AccountEffect::SignInSuccess) => {
-                    self.sign_in = SignInStatus::Success;
-                }
-                AppEffect::AccountEffect(AccountEffect::SignInFailed) => {
-                    self.sign_in = SignInStatus::Failed;
-                }
-                _ => (),
-            }
-        }
-        notify(self);
+fn make_mutation<'a, S: Store + 'a, R: Reducer + 'a>(
+    store: S,
+    accessor: impl Fn(&mut S) -> &mut R + 'a,
+    on_change: &'a dyn Fn(&<S as Diff>::Repr),
+) -> impl Fn(&R, &dyn Fn(&mut R)) -> R + 'a {
+    move |_state: &R, mutation: &dyn Fn(&mut R)| {
+        let mut next = store.clone();
+        mutation(accessor(&mut next));
+        let diff = store.diff(&next);
+        on_change(&diff);
+        accessor(&mut next).clone()
     }
+}
+
+use tsify_next::Tsify;
+
+#[derive(Deserialize, Tsify, Clone, Debug)]
+#[tsify(from_wasm_abi)]
+pub enum FormEvent {
+    UpdateUsername(String),
 }
 
 #[derive(Deserialize, Tsify, Clone, Debug)]
 #[tsify(from_wasm_abi)]
-pub enum UIEvent {
-    UsernameUpdate(String),
-    PasswordUpdate(String),
-    SignInButtonClick,
+pub enum AppEvent {
+    Form(FormEvent),
+}
+
+impl Store for AppStore {
+    type Event = AppEvent;
+
+    async fn process_event(
+        &mut self,
+        event: Self::Event,
+        on_change: &dyn Fn(&<Self as Diff>::Repr),
+    ) {
+        let form_mutation = make_mutation(self.clone(), |store| &mut store.form, on_change);
+        match event {
+            AppEvent::Form(form_event) => {
+                self.form = self.form.process_event(form_event, &form_mutation).await
+            }
+        };
+    }
 }
 
 #[wasm_bindgen]
-pub struct AccountStore {
-    state: Rc<RefCell<AccountState>>,
-    sender: mpsc::UnboundedSender<UIEvent>,
-    on_change: js_sys::Function,
+pub struct EventBus {
+    sender: mpsc::UnboundedSender<AppEvent>,
 }
 
 #[wasm_bindgen]
-impl AccountStore {
+impl EventBus {
     #[wasm_bindgen(constructor)]
     pub fn new(on_change: js_sys::Function) -> Self {
-        let state = Rc::new(RefCell::new(AccountState::default()));
-        let (sender, mut receiver) = mpsc::unbounded::<UIEvent>();
-
-        let state_loop = Rc::clone(&state);
-        let on_change_loop = on_change.clone();
-
+        let (sender, mut receiver) = mpsc::unbounded();
         spawn_local(async move {
+            let mut store = AppStore::default();
+            let on_change = move |diff: &AppStoreDiff| {
+                let js_diff = serde_wasm_bindgen::to_value(diff).unwrap();
+                let _ = on_change.call1(&JsValue::NULL, &js_diff);
+            };
             while let Some(event) = receiver.next().await {
-                let notify = |state: &AccountState| {
-                    let snapshot = serde_wasm_bindgen::to_value(state).unwrap();
-                    let _ = on_change_loop.call1(&JsValue::NULL, &snapshot);
-                };
-                state_loop.borrow_mut().process_event(event, &notify).await;
+                store.process_event(event, &on_change).await;
             }
         });
-
-        let store = Self {
-            state,
-            sender,
-            on_change,
-        };
-        store.notify();
-        store
+        Self { sender }
     }
 
-    fn notify(&self) {
-        let snapshot = serde_wasm_bindgen::to_value(&*self.state.borrow()).unwrap();
-        let _ = self.on_change.call1(&JsValue::NULL, &snapshot);
-    }
-
-    #[wasm_bindgen]
-    pub fn dispatch(&self, event: UIEvent) {
+    pub fn dispatch(&self, event: AppEvent) {
         let _ = self.sender.unbounded_send(event);
     }
 }
 
-async fn dispatch_to_server(event: AppEvent) -> Result<Vec<AppEffect>, JsValue> {
-    let resp = Request::post("/ev")
-        .json(&event)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
-        .send()
-        .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    resp.json()
-        .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    #[test]
+    fn test_store_dispatch() {
+        let mut store = AppStore::default();
+        let diffs: std::cell::RefCell<Vec<AppStoreDiff>> = std::cell::RefCell::new(vec![]);
+
+        let on_change = |diff: &AppStoreDiff| {
+            diffs.borrow_mut().push(diff.clone());
+        };
+
+        futures::executor::block_on(store.process_event(
+            AppEvent::Form(FormEvent::UpdateUsername("Alice".into())),
+            &on_change,
+        ));
+
+        let diffs = diffs.borrow();
+        assert_eq!(diffs.len(), 1);
+        assert_eq!(diffs[0].form.username, Some("Alice".into()));
+        assert_eq!(diffs[0].form.password, None);
+    }
 }

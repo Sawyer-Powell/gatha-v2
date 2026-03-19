@@ -1,61 +1,57 @@
-import { create } from "zustand";
-import init, { AccountStore } from "./wasm/client";
+import { deepSignal } from "deepsignal";
+import init, { EventBus } from "./wasm/client";
 
 await init();
 
-interface AccountState {
+interface AccountForm {
   username: string;
   password: string;
-  sign_in: "Ready" | "Processing" | "Success" | "Failed";
 }
 
-const useAccountStore = create<AccountState & { store: AccountStore }>(
-  (set) => {
-    const store = new AccountStore((snapshot: AccountState) => {
-      set(snapshot);
-    });
+interface AppState {
+  form: AccountForm;
+}
 
-    return {
-      username: "",
-      password: "",
-      sign_in: "Ready",
-      store,
-    };
-  },
-);
+const state = deepSignal<AppState>({
+  form: { username: "", password: "" },
+});
+
+function applyDiff(diff: Partial<AppState>) {
+  if (diff.form) {
+    for (const [key, value] of Object.entries(diff.form)) {
+      if (value != null) {
+        (state.form as any)[key] = value;
+      }
+    }
+  }
+}
+
+const bus = new EventBus(applyDiff);
 
 export function App() {
-  const { username, password, sign_in, store } = useAccountStore();
-
   return (
     <section id="center">
       <h1>Gatha</h1>
+      <h1>{state.form.$username}</h1>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          store.dispatch("SignInButtonClick");
         }}
       >
         <input
           type="text"
           placeholder="Username"
-          value={username}
+          value={state.form.username}
           onInput={(e) =>
-            store.dispatch({ UsernameUpdate: e.currentTarget.value })
+            bus.dispatch({ Form: { UpdateUsername: e.currentTarget.value } })
           }
         />
         <input
           type="password"
           placeholder="Password"
-          value={password}
-          onInput={(e) =>
-            store.dispatch({ PasswordUpdate: e.currentTarget.value })
-          }
+          value={state.form.password}
         />
-        <button type="submit" disabled={sign_in === "Processing"}>
-          Sign In
-        </button>
-        <p>Status: {sign_in}</p>
+        <button type="submit">Sign In</button>
       </form>
     </section>
   );
