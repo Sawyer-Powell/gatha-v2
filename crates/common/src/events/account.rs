@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use veil::Redact;
 
-#[derive(Serialize, Deserialize, Redact)]
+#[derive(Serialize, Deserialize, Redact, Clone)]
 pub enum ServerEvent {
     Register { username: String, #[redact] password: String },
     SignIn { username: String, #[redact] password: String },

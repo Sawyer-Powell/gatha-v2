@@ -21,6 +21,9 @@ pub enum AppError {
 
     #[error("effect channel closed")]
     EffectChannelClosed,
+
+    #[error("event bus closed")]
+    EventBusClosed,
 }
 
 impl From<TransactionError<AppError>> for AppError {

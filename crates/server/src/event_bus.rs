@@ -1,10 +1,6 @@
-use std::{
-    collections::HashMap,
-    sync::{Condvar, Mutex},
-};
+use std::sync::Arc;
 
-use sled::IVec;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 
 use common::events::*;
@@ -15,104 +11,71 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-type Waiter = (oneshot::Sender<Vec<ServerEffect>>, tracing::Span);
-type WaiterMap = HashMap<IVec, Waiter>;
+struct EventMessage {
+    event: ServerEvent,
+    waiter: oneshot::Sender<Vec<ServerEffect>>,
+    caller_span: tracing::Span,
+}
 
 pub struct EventBus {
-    pub waiters: Mutex<WaiterMap>,
-    pub condvar: Condvar,
-    pub latest_event_id: Mutex<Option<IVec>>,
+    sender: mpsc::UnboundedSender<EventMessage>,
 }
 
 impl EventBus {
-    pub fn new() -> Self {
-        Self {
-            waiters: Mutex::new(HashMap::new()),
-            condvar: Condvar::new(),
-            latest_event_id: Mutex::new(None),
-        }
-    }
+    pub fn new(db: Arc<AppDb>) -> Self {
+        let (sender, mut receiver) = mpsc::unbounded_channel::<EventMessage>();
 
-    pub fn submit(
-        &self,
-        event: &ServerEvent,
-        db: &AppDb,
-    ) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
-        let event_id = db.event_store.write_event(event)?;
-        let (sender, receiver) = oneshot::channel();
-        let caller_span = tracing::Span::current();
+        tokio::spawn(async move {
+            while let Some(msg) = receiver.recv().await {
+                let _root =
+                    tracing::info_span!(parent: &msg.caller_span, "event_loop.process").entered();
 
-        self.waiters
-            .lock()
-            .map_err(|e| AppError::PoisonedLock(e.to_string()))?
-            .insert(event_id.clone(), (sender, caller_span));
+                let event_id = {
+                    let _span = tracing::info_span!("event_bus.write_event").entered();
+                    db.event_store.write_event(&msg.event)
+                };
 
-        *self
-            .latest_event_id
-            .lock()
-            .map_err(|e| AppError::PoisonedLock(e.to_string()))? = Some(event_id.clone());
-
-        self.condvar.notify_one();
-
-        Ok(receiver)
-    }
-
-    pub fn event_loop(&self, db: &AppDb) -> AppResult<()> {
-        loop {
-            // First compare our event cursor to the latest event we've received
-            // If the latest event is not equal to our event cursor, that means
-            // new events have been written, and need processing. If not, we park
-            // the thread until something has been written.
-            {
-                let event_cursor = db.event_store.get_cursor()?;
-                let mut mutex_latest_id = self
-                    .latest_event_id
-                    .lock()
-                    .map_err(|e| AppError::PoisonedLock(e.to_string()))?;
-                // Use a while loop here since condvar can have spurious wake ups
-                // even when value we're blocked on hasn't changed
-                while *mutex_latest_id == event_cursor {
-                    mutex_latest_id = self
-                        .condvar
-                        .wait(mutex_latest_id)
-                        .map_err(|e| AppError::PoisonedLock(e.to_string()))?;
-                }
-            }
-
-            for event in db.event_store.unprocessed_events()? {
-                let (event_id, event) = event?;
-
-                // Retrieve waiter and caller span
-                let (waiter, caller_span) = match self
-                    .waiters
-                    .lock()
-                    .map_err(|e| AppError::PoisonedLock(e.to_string()))?
-                    .remove(&event_id)
-                {
-                    Some(w) => w,
-                    None => {
-                        warn!(
-                            "Could not find event id in EventBus waiters: {:?}",
-                            event_id
-                        );
+                let event_id = match event_id {
+                    Ok(id) => id,
+                    Err(e) => {
+                        warn!("Failed to write event: {:?}", e);
                         continue;
                     }
                 };
 
-                // Process under the caller's span so it appears in the same trace
                 let effects = {
-                    let _span = tracing::info_span!(parent: &caller_span, "event_loop.process").entered();
-                    db.process_event(&event_id, &event, &db.event_store)?
+                    let _span = tracing::info_span!("event_bus.process_event").entered();
+                    db.process_event(&event_id, &msg.event, &db.event_store)
                 };
 
-                // Send message over our waiter
-                if let Err(effects) = waiter.send(effects) {
-                    warn!(
-                        "Could not respond with effects over waiter for event id {:?}: {:?}",
-                        event_id, effects
-                    );
+                match effects {
+                    Ok(effects) => {
+                        if let Err(effects) = msg.waiter.send(effects) {
+                            warn!("Could not respond with effects: {:?}", effects);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to process event: {:?}", e);
+                    }
                 }
             }
-        }
+        });
+
+        Self { sender }
+    }
+
+    pub fn submit(&self, event: &ServerEvent) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
+        let (waiter, receiver) = oneshot::channel();
+        let caller_span = tracing::Span::current();
+
+        self.sender
+            .send(EventMessage {
+                event: event.clone(),
+                waiter,
+                caller_span,
+            })
+            .map_err(|_| AppError::EventBusClosed)?;
+
+        Ok(receiver)
     }
 }

@@ -23,7 +23,7 @@ pub struct AppConfig {
 }
 
 pub struct AppState {
-    pub db: AppDb,
+    pub db: Arc<AppDb>,
     pub event_bus: EventBus,
 }
 
@@ -32,7 +32,7 @@ async fn handle_event(
     State(state): State<Arc<AppState>>,
     Json(event): Json<ServerEvent>,
 ) -> AppResult<Json<Vec<ServerEffect>>> {
-    let receiver = tokio::task::block_in_place(|| state.event_bus.submit(&event, &state.db))?;
+    let receiver = state.event_bus.submit(&event)?;
     let effects = receiver.await.map_err(|_| AppError::EffectChannelClosed)?;
     Ok(Json(effects))
 }
@@ -88,17 +88,11 @@ async fn main() -> AppResult<()> {
         db: DbConfig::Temporary,
     };
 
-    let app_state = Arc::new(AppState {
-        db: AppDb::new(&config)?,
-        event_bus: EventBus::new(),
-    });
+    let db = Arc::new(AppDb::new(&config)?);
 
-    // Spawn the event loop on a dedicated OS thread
-    let app_state_cloned = app_state.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_state_cloned.event_bus.event_loop(&app_state_cloned.db) {
-            panic!("Event processor crashed: {e}");
-        }
+    let app_state = Arc::new(AppState {
+        event_bus: EventBus::new(db.clone()),
+        db,
     });
 
     let app = Router::new()

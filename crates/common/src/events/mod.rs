@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod account;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerEvent {
     Account(account::ServerEvent),
 }
