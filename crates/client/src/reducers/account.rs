@@ -5,10 +5,11 @@ use tsify_next::Tsify;
 
 use crate::{
     dispatch_server_event,
+    error::ClientResult,
     state::{Mutater, Reducer},
 };
 
-#[derive(Serialize, Clone, Default, Diff, Tsify)]
+#[derive(Serialize, Clone, Default, Diff, Tsify, Debug)]
 #[tsify(into_wasm_abi)]
 #[diff(attr(
     #[derive(Serialize, Clone, Debug)]
@@ -21,7 +22,7 @@ pub enum AccountSignInStatus {
     Failed,
 }
 
-#[derive(Serialize, Clone, Default, Diff, Tsify)]
+#[derive(Serialize, Clone, Default, Diff, Tsify, Debug)]
 #[tsify(into_wasm_abi)]
 #[diff(attr(
     #[derive(Serialize, Clone, Debug)]
@@ -41,7 +42,7 @@ pub enum AccountUIEvent {
 }
 
 impl AccountState {
-    async fn sign_in(&self, mutate: &Mutater<Self>) -> Self {
+    async fn sign_in(&self, mutate: &Mutater<Self>) -> ClientResult<Self> {
         let mut next = mutate(self, &|state| {
             state.sign_in_status = AccountSignInStatus::Loading
         });
@@ -49,8 +50,7 @@ impl AccountState {
             username: self.username.clone(),
             password: self.password.clone(),
         }))
-        .await
-        .unwrap();
+        .await?;
 
         for effect in effects {
             match effect {
@@ -68,23 +68,26 @@ impl AccountState {
             }
         }
 
-        next
+        Ok(next)
     }
 }
 
 impl Reducer for AccountState {
     type Event = AccountUIEvent;
 
-    async fn process_event(&self, event: Self::Event, mutate: &Mutater<Self>) -> Self {
-        let next = match event {
-            AccountUIEvent::SignInButtonClicked => self.sign_in(mutate).await,
+    async fn process_event(
+        &self,
+        event: Self::Event,
+        mutate: &Mutater<Self>,
+    ) -> ClientResult<Self> {
+        Ok(match event {
+            AccountUIEvent::SignInButtonClicked => self.sign_in(mutate).await?,
             AccountUIEvent::UsernameChanged(username) => {
                 mutate(self, &|state| state.username = username.clone())
             }
             AccountUIEvent::PasswordChanged(password) => {
                 mutate(self, &|state| state.password = password.clone())
             }
-        };
-        next
+        })
     }
 }

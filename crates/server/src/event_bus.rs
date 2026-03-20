@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 
 use common::events::*;
 use common::traits::*;
 
-use crate::{
-    app_db::AppDb,
-    error::{AppError, AppResult},
-};
+use crate::{app_db::AppDb, error::AppResult};
 
 struct EventMessage {
     event: ServerEvent,
@@ -74,7 +72,7 @@ impl EventBus {
                 waiter,
                 caller_span,
             })
-            .map_err(|_| AppError::EventBusClosed)?;
+            .context("Failed to send event to event bus")?;
 
         Ok(receiver)
     }

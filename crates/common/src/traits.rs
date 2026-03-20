@@ -4,6 +4,7 @@ pub trait EventStore {
     type Result<T>;
 
     fn write_event(&self, ev: &Self::Event) -> Self::Result<Self::EventId>;
+    #[allow(clippy::type_complexity)]
     fn unprocessed_events(
         &self,
     ) -> Self::Result<impl Iterator<Item = Self::Result<(Self::EventId, Self::Event)>>>;

@@ -10,27 +10,21 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys;
 use wasm_bindgen_futures::spawn_local;
 
+use crate::error::ClientResult;
 use crate::state::Reducer;
 use crate::state::Store;
 use crate::state::make_mutation;
 
+mod error;
 mod reducers;
 mod state;
 
-pub async fn dispatch_server_event(event: &ServerEvent) -> Result<Vec<ServerEffect>, JsValue> {
-    let resp = Request::post("/ev")
-        .json(event)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
-        .send()
-        .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    resp.json()
-        .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+pub async fn dispatch_server_event(event: &ServerEvent) -> ClientResult<Vec<ServerEffect>> {
+    let resp = Request::post("/ev").json(event)?.send().await?;
+    Ok(resp.json().await?)
 }
 
-#[derive(Serialize, Clone, Default, Diff, Tsify)]
+#[derive(Serialize, Clone, Default, Diff, Tsify, Debug)]
 #[tsify(into_wasm_abi)]
 #[diff(attr(
     #[derive(Serialize, Clone, Debug)]
@@ -52,16 +46,18 @@ impl Store for AppStore {
         &mut self,
         event: Self::Event,
         on_change: std::rc::Rc<dyn Fn(&<Self as Diff>::Repr)>,
-    ) {
+    ) -> ClientResult<()> {
         let account_mx = make_mutation(self.clone(), |store| &mut store.account, on_change);
         match event {
             UIEvent::Account(form_event) => {
-                self.account = self.account.process_event(form_event, &account_mx).await
+                self.account = self.account.process_event(form_event, &account_mx).await?
             }
         };
+        Ok(())
     }
 }
 
+#[derive(Debug)]
 #[wasm_bindgen]
 pub struct EventBus {
     sender: mpsc::UnboundedSender<UIEvent>,
@@ -76,11 +72,17 @@ impl EventBus {
             let mut store = AppStore::default();
             let on_change: std::rc::Rc<dyn Fn(&AppStoreDiff)> =
                 std::rc::Rc::new(move |diff: &AppStoreDiff| {
-                    let js_diff = serde_wasm_bindgen::to_value(diff).unwrap();
-                    let _ = on_change.call1(&JsValue::NULL, &js_diff);
+                    match serde_wasm_bindgen::to_value(diff) {
+                        Ok(js_diff) => {
+                            let _ = on_change.call1(&JsValue::NULL, &js_diff);
+                        }
+                        Err(e) => log::error!("failed to serialize diff: {}", e),
+                    }
                 });
             while let Some(event) = receiver.next().await {
-                store.process_event(event, on_change.clone()).await;
+                if let Err(e) = store.process_event(event, on_change.clone()).await {
+                    log::error!("failed to process event: {}", e);
+                }
             }
         });
         Self { sender }
@@ -91,7 +93,14 @@ impl EventBus {
     }
 }
 
+#[wasm_bindgen]
+pub fn init(on_change: js_sys::Function) -> EventBus {
+    console_log::init_with_level(log::Level::Debug).ok();
+    EventBus::new(on_change)
+}
+
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -113,7 +122,8 @@ mod tests {
                 "Alice".into(),
             )),
             on_change,
-        ));
+        ))
+        .unwrap();
 
         let diffs = diffs.borrow();
         assert_eq!(diffs.len(), 1);
@@ -129,11 +139,17 @@ mod tests {
         b.username = "Alice".into();
 
         let diff = a.diff(&b);
-        println!("diff json: {}", serde_json::to_string_pretty(&diff).unwrap());
+        println!(
+            "diff json: {}",
+            serde_json::to_string_pretty(&diff).unwrap()
+        );
 
         let mut c = a.clone();
         c.sign_in_status = AccountSignInStatus::Loading;
         let diff2 = a.diff(&c);
-        println!("enum diff json: {}", serde_json::to_string_pretty(&diff2).unwrap());
+        println!(
+            "enum diff json: {}",
+            serde_json::to_string_pretty(&diff2).unwrap()
+        );
     }
 }

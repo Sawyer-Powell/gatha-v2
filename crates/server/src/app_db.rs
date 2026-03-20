@@ -3,11 +3,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sled::transaction::{Transactional, TransactionalTree};
+use sled::transaction::{
+    ConflictableTransactionError, TransactionError, Transactional, TransactionalTree,
+};
 use sled::{IVec, Tree};
 use tracing::debug;
 
-use crate::error::{AppResult, IntoTransactionError};
+use crate::error::AppResult;
 use crate::{AppConfig, DbConfig};
 use common::events::{self, account};
 use common::traits::*;
@@ -38,7 +40,7 @@ impl AccountStore {
             last_login: None,
         };
 
-        tx_accounts.insert(username.as_bytes(), postcard::to_allocvec(&account)?)?;
+        tx_accounts.insert(username.as_bytes(), rmp_serde::to_vec(&account)?)?;
 
         Ok(())
     }
@@ -56,16 +58,16 @@ impl AccountStore {
         };
 
         let account = &*account;
-        let mut account = postcard::from_bytes::<Account>(account)?;
+        let mut account = rmp_serde::from_slice::<Account>(account)?;
 
         let valid = account.username == username && account.password == password;
 
         if valid {
             account.last_login = Some(Utc::now());
-            tx_accounts.insert(username.as_bytes(), postcard::to_allocvec(&account)?)?;
+            tx_accounts.insert(username.as_bytes(), rmp_serde::to_vec(&account)?)?;
         }
 
-        return Ok(valid);
+        Ok(valid)
     }
 }
 
@@ -83,13 +85,14 @@ impl EventProcessor for AccountStore {
         event: &Self::Event,
         store: &AppEventStore,
     ) -> AppResult<Vec<Self::Effect>> {
-        let effects: Vec<Self::Effect> =
-            (&self.accounts, &store.cursor).transaction(|&(ref tx_accounts, ref tx_cursor)| {
+        let effects = transaction(
+            &(&self.accounts, &store.cursor),
+            |(tx_accounts, tx_cursor)| {
                 let mut effects: Vec<Self::Effect> = Vec::new();
 
                 match event {
                     account::ServerEvent::SignIn { username, password } => {
-                        let success = self.sign_in(username, password, tx_accounts).tx()?;
+                        let success = self.sign_in(username, password, tx_accounts)?;
                         if success {
                             effects.push(account::ServerEffect::SignInSuccess);
                         } else {
@@ -97,18 +100,31 @@ impl EventProcessor for AccountStore {
                         }
                     }
                     account::ServerEvent::Register { username, password } => {
-                        self.register(username, password, tx_accounts).tx()?;
+                        self.register(username, password, tx_accounts)?;
                         effects.push(account::ServerEffect::RegistrationOk);
                     }
                 }
 
-                store.set_cursor(tx_cursor, event_id).tx()?;
+                store.set_cursor(tx_cursor, event_id)?;
 
                 Ok(effects)
-            })?;
+            },
+        )?;
 
         Ok(effects)
     }
+}
+
+pub fn transaction<T: Transactional<anyhow::Error>, R>(
+    transactee: &T,
+    f: impl Fn(&T::View) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    transactee
+        .transaction(|view| f(view).map_err(ConflictableTransactionError::Abort))
+        .map_err(|e| match e {
+            TransactionError::Abort(anyhow_err) => anyhow_err,
+            TransactionError::Storage(sled_err) => anyhow::Error::from(sled_err),
+        })
 }
 
 pub struct AppEventStore {
@@ -149,7 +165,7 @@ impl EventStore for AppEventStore {
     type Result<T> = AppResult<T>;
 
     fn write_event(&self, ev: &Self::Event) -> AppResult<IVec> {
-        let bytes = postcard::to_allocvec(ev)?;
+        let bytes = rmp_serde::to_vec(ev)?;
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let key = Self::id_to_bytes(id);
         self.events.insert(key, bytes.as_slice())?;
@@ -178,7 +194,7 @@ impl EventStore for AppEventStore {
 
         Ok(iter.map(|item| {
             let (key, value) = item?;
-            let event = postcard::from_bytes::<events::ServerEvent>(&value)?;
+            let event = rmp_serde::from_slice::<events::ServerEvent>(&value)?;
             Ok((key, event))
         }))
     }

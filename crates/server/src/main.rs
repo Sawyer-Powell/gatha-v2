@@ -5,11 +5,15 @@ mod testing;
 
 use std::sync::Arc;
 
+use anyhow::Context;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::{Json, Router, routing::post};
+use tracing::instrument;
+use tracing_tree::HierarchicalLayer;
 
 use crate::app_db::AppDb;
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::event_bus::EventBus;
 use common::events::*;
 
@@ -31,13 +35,18 @@ pub struct AppState {
 async fn handle_event(
     State(state): State<Arc<AppState>>,
     Json(event): Json<ServerEvent>,
-) -> AppResult<Json<Vec<ServerEffect>>> {
-    let receiver = state.event_bus.submit(&event)?;
-    let effects = receiver.await.map_err(|_| AppError::EffectChannelClosed)?;
+) -> Result<Json<Vec<ServerEffect>>, (StatusCode, String)> {
+    let receiver = state
+        .event_bus
+        .submit(&event)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let effects = receiver
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(effects))
 }
 
-fn init_tracing() {
+fn init_tracing() -> AppResult<()> {
     use opentelemetry::trace::TracerProvider;
     use opentelemetry_otlp::WithExportConfig;
     use tracing_subscriber::layer::SubscriberExt;
@@ -46,8 +55,7 @@ fn init_tracing() {
     let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .with_endpoint("http://localhost:4317")
-        .build()
-        .expect("failed to create OTLP exporter");
+        .build()?;
 
     let resource = opentelemetry_sdk::Resource::builder()
         .with_service_name("gatha-server")
@@ -69,20 +77,31 @@ fn init_tracing() {
     let tracer = tracer_provider.tracer("gatha-server");
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let fmt_layer = tracing_subscriber::fmt::layer();
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "server=debug".parse().unwrap());
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        match "server=debug".parse() {
+            Ok(filter) => filter,
+            Err(_) => unreachable!("failed to parse server=debug filter"),
+        }
+    });
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(fmt_layer)
+        .with(
+            HierarchicalLayer::new(2)
+                .with_targets(true)
+                .with_ansi(true)
+                .with_bracketed_fields(false),
+        )
         .with(otel_layer)
         .init();
+
+    Ok(())
 }
 
 #[tokio::main]
+#[instrument(err)]
 async fn main() -> AppResult<()> {
-    init_tracing();
+    init_tracing()?;
 
     let config = AppConfig {
         db: DbConfig::Temporary,
@@ -99,24 +118,47 @@ async fn main() -> AppResult<()> {
         .route("/ev", post(handle_event))
         .with_state(app_state);
 
-    let socket = tokio::net::TcpSocket::new_v4().unwrap();
-    socket.set_reuseaddr(true).unwrap();
-    socket.bind("0.0.0.0:3000".parse().unwrap()).unwrap();
-    let listener = socket.listen(1024).unwrap();
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    socket.set_reuseaddr(true)?;
+    socket
+        .bind("0.0.0.0:3000".parse().context("Could not parse address")?)
+        .context("Failed to bind to socket")?;
+    let listener = socket.listen(1024).context("Failed to bind to socket")?;
     println!("Listening on 0.0.0.0:3000");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .await
+        .context("Critical error while serving app")?;
 
     Ok(())
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod test {
     use common::events::{ServerEffect, ServerEvent, account};
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_tree::HierarchicalLayer;
+    use tracing_tree::time::Uptime;
 
     use crate::testing::{dispatch_event, spin_up};
 
+    fn init_test_tracing() {
+        let filter = tracing_subscriber::EnvFilter::new("server=debug");
+        let _ = tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                HierarchicalLayer::new(2)
+                    .with_targets(true)
+                    .with_bracketed_fields(false),
+            )
+            .try_init();
+    }
+
     #[tokio::test]
     async fn test_register_and_sign_in() {
+        init_test_tracing();
+
         let state = spin_up().unwrap();
 
         let effects = dispatch_event(

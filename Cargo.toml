@@ -5,3 +5,8 @@ members = [
     "crates/server",
     "crates/client"
 ]
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic_used = "deny"
