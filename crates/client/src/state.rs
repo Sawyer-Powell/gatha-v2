@@ -5,12 +5,11 @@ use crate::error::ClientResult;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub type Mutater<T> = dyn Fn(&T, &dyn Fn(&mut T)) -> T;
+pub type Mutate<T> = dyn Fn(&T, &dyn Fn(&mut T)) -> T;
 
 pub trait Reducer: Serialize + Default + Clone + Diff {
     type Event;
-    async fn process_event(&self, event: Self::Event, mutate: &Mutater<Self>)
-    -> ClientResult<Self>;
+    async fn process_event(&self, event: Self::Event, mutate: &Mutate<Self>) -> ClientResult<Self>;
 }
 
 type OnChange<T> = dyn Fn(&<T as Diff>::Repr);

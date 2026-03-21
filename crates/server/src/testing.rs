@@ -10,6 +10,8 @@ use common::events::*;
 pub fn spin_up() -> AppResult<Arc<AppState>> {
     let config = AppConfig {
         db: DbConfig::Temporary,
+        otel_endpoint: None,
+        server_address: "0.0.0.0:3000".to_string(),
     };
 
     let db = Arc::new(AppDb::new(&config)?);

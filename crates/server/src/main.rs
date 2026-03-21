@@ -3,12 +3,18 @@ mod error;
 mod event_bus;
 mod testing;
 
+use std::env;
 use std::sync::Arc;
 
 use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::{Json, Router, routing::post};
+use opentelemetry::trace::TracerProvider;
+use opentelemetry_otlp::WithExportConfig;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+
 use tracing::instrument;
 use tracing_tree::HierarchicalLayer;
 
@@ -24,6 +30,23 @@ pub enum DbConfig {
 
 pub struct AppConfig {
     pub db: DbConfig,
+    pub server_address: String,
+    pub otel_endpoint: Option<String>,
+}
+
+impl AppConfig {
+    pub fn from_env() -> AppResult<Self> {
+        dotenvy::dotenv().ok();
+
+        Ok(Self {
+            db: match env::var("DB_PATH").ok() {
+                Some(path) => DbConfig::Persistent { path },
+                None => DbConfig::Temporary,
+            },
+            server_address: env::var("SERVER_ADDR").context("SERVER_ADDR not set")?,
+            otel_endpoint: env::var("OTEL_ENDPOINT").ok(),
+        })
+    }
 }
 
 pub struct AppState {
@@ -46,37 +69,7 @@ async fn handle_event(
     Ok(Json(effects))
 }
 
-fn init_tracing() -> AppResult<()> {
-    use opentelemetry::trace::TracerProvider;
-    use opentelemetry_otlp::WithExportConfig;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-
-    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint("http://localhost:4317")
-        .build()?;
-
-    let resource = opentelemetry_sdk::Resource::builder()
-        .with_service_name("gatha-server")
-        .build();
-
-    let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(otlp_exporter)
-        .with_batch_config(
-            opentelemetry_sdk::trace::BatchConfigBuilder::default()
-                .with_scheduled_delay(std::time::Duration::from_millis(500))
-                .build(),
-        )
-        .build();
-
-    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_span_processor(batch_processor)
-        .with_resource(resource)
-        .build();
-
-    let tracer = tracer_provider.tracer("gatha-server");
-    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-
+fn init_tracing(config: &AppConfig) -> AppResult<()> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         match "server=debug".parse() {
             Ok(filter) => filter,
@@ -84,14 +77,43 @@ fn init_tracing() -> AppResult<()> {
         }
     });
 
+    let tree_layer = HierarchicalLayer::new(2)
+        .with_targets(true)
+        .with_ansi(true)
+        .with_bracketed_fields(false);
+
+    let otel_layer = if let Some(otel_endpoint) = config.otel_endpoint.as_ref() {
+        let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(otel_endpoint)
+            .build()?;
+
+        let resource = opentelemetry_sdk::Resource::builder()
+            .with_service_name("gatha-server")
+            .build();
+
+        let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(otlp_exporter)
+            .with_batch_config(
+                opentelemetry_sdk::trace::BatchConfigBuilder::default()
+                    .with_scheduled_delay(std::time::Duration::from_millis(500))
+                    .build(),
+            )
+            .build();
+
+        let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_span_processor(batch_processor)
+            .with_resource(resource)
+            .build();
+
+        let tracer = tracer_provider.tracer("gatha-server");
+        Some(tracing_opentelemetry::layer().with_tracer(tracer))
+    } else {
+        None
+    };
+
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(
-            HierarchicalLayer::new(2)
-                .with_targets(true)
-                .with_ansi(true)
-                .with_bracketed_fields(false),
-        )
+        .with(tree_layer)
         .with(otel_layer)
         .init();
 
@@ -101,11 +123,8 @@ fn init_tracing() -> AppResult<()> {
 #[tokio::main]
 #[instrument(err)]
 async fn main() -> AppResult<()> {
-    init_tracing()?;
-
-    let config = AppConfig {
-        db: DbConfig::Temporary,
-    };
+    let config = AppConfig::from_env()?;
+    init_tracing(&config)?;
 
     let db = Arc::new(AppDb::new(&config)?);
 
@@ -121,10 +140,15 @@ async fn main() -> AppResult<()> {
     let socket = tokio::net::TcpSocket::new_v4()?;
     socket.set_reuseaddr(true)?;
     socket
-        .bind("0.0.0.0:3000".parse().context("Could not parse address")?)
+        .bind(
+            config
+                .server_address
+                .parse()
+                .context("Could not parse address")?,
+        )
         .context("Failed to bind to socket")?;
     let listener = socket.listen(1024).context("Failed to bind to socket")?;
-    println!("Listening on 0.0.0.0:3000");
+    println!("Listening on {}", config.server_address);
     axum::serve(listener, app)
         .await
         .context("Critical error while serving app")?;
@@ -139,7 +163,6 @@ mod test {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_tree::HierarchicalLayer;
-    use tracing_tree::time::Uptime;
 
     use crate::testing::{dispatch_event, spin_up};
 

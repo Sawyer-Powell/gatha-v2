@@ -6,7 +6,7 @@ use tsify_next::Tsify;
 use crate::{
     dispatch_server_event,
     error::ClientResult,
-    state::{Mutater, Reducer},
+    state::{Mutate, Reducer},
 };
 
 #[derive(Serialize, Clone, Default, Diff, Tsify, Debug)]
@@ -42,7 +42,7 @@ pub enum AccountUIEvent {
 }
 
 impl AccountState {
-    async fn sign_in(&self, mutate: &Mutater<Self>) -> ClientResult<Self> {
+    async fn sign_in(&self, mutate: &Mutate<Self>) -> ClientResult<Self> {
         let mut next = mutate(self, &|state| {
             state.sign_in_status = AccountSignInStatus::Loading
         });
@@ -75,11 +75,7 @@ impl AccountState {
 impl Reducer for AccountState {
     type Event = AccountUIEvent;
 
-    async fn process_event(
-        &self,
-        event: Self::Event,
-        mutate: &Mutater<Self>,
-    ) -> ClientResult<Self> {
+    async fn process_event(&self, event: Self::Event, mutate: &Mutate<Self>) -> ClientResult<Self> {
         Ok(match event {
             AccountUIEvent::SignInButtonClicked => self.sign_in(mutate).await?,
             AccountUIEvent::UsernameChanged(username) => {
