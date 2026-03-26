@@ -4,12 +4,12 @@ use veil::Redact;
 #[derive(Serialize, Deserialize, Redact, Clone)]
 pub enum ServerEvent {
     Register {
-        username: String,
+        email: String,
         #[redact]
         password: String,
     },
     SignIn {
-        username: String,
+        email: String,
         #[redact]
         password: String,
     },

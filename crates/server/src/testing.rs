@@ -1,4 +1,3 @@
-#![cfg(test)]
 use std::sync::Arc;
 
 use crate::{AppConfig, AppState, DbConfig, app_db::AppDb, error::AppResult, event_bus::EventBus};

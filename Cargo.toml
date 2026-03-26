@@ -3,7 +3,9 @@ resolver = "3"
 members = [
     "crates/common",
     "crates/server",
-    "crates/client"
+    "crates/client",
+    "crates/client-wasm",
+    "crates/e2e",
 ]
 
 [workspace.lints.clippy]

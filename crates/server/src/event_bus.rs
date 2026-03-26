@@ -48,6 +48,7 @@ impl EventBus {
 
                 match effects {
                     Ok(effects) => {
+                        tracing::info!("effects: {:?}", &effects);
                         if let Err(effects) = msg.waiter.send(effects) {
                             warn!("Could not respond with effects: {:?}", effects);
                         }

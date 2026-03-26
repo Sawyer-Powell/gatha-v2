@@ -4,23 +4,38 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
+
+[features]
+wasm = [
+    "dep:gloo-net",
+    "dep:serde-wasm-bindgen",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:web-sys",
+    "dep:tsify-next",
+    "dep:console_log",
+    "dep:js-sys",
+]
 
 [dependencies]
-common = { path = "../common"}
-gloo-net = "0.6.0"
+common = { path = "../common" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-serde-wasm-bindgen = "0.6"
-wasm-bindgen = "0.2.114"
-wasm-bindgen-futures = "0.4.64"
-web-sys = { version = "0.3", features = ["console"] }
 futures = "0.3.32"
-tsify-next = { version = "0.5", features = ["js"] }
 diff-struct = "0.5.3"
 anyhow = "1.0.102"
-console_log = "1.0.0"
 log = "0.4.29"
+
+# WASM-only dependencies
+gloo-net = { version = "0.6.0", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+wasm-bindgen = { version = "0.2.114", optional = true }
+wasm-bindgen-futures = { version = "0.4.64", optional = true }
+web-sys = { version = "0.3", features = ["console"], optional = true }
+tsify-next = { version = "0.5", features = ["js"], optional = true }
+console_log = { version = "1.0.0", optional = true }
+js-sys = { version = "0.3", optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

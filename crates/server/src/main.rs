@@ -1,73 +1,18 @@
-mod app_db;
-mod error;
-mod event_bus;
-mod testing;
-
-use std::env;
 use std::sync::Arc;
 
 use anyhow::Context;
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum::{Json, Router, routing::post};
+use axum::{Router, routing::post};
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
+use tracing::instrument;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-
-use tracing::instrument;
 use tracing_tree::HierarchicalLayer;
 
-use crate::app_db::AppDb;
-use crate::error::AppResult;
-use crate::event_bus::EventBus;
-use common::events::*;
-
-pub enum DbConfig {
-    Temporary,
-    Persistent { path: String },
-}
-
-pub struct AppConfig {
-    pub db: DbConfig,
-    pub server_address: String,
-    pub otel_endpoint: Option<String>,
-}
-
-impl AppConfig {
-    pub fn from_env() -> AppResult<Self> {
-        dotenvy::dotenv().ok();
-
-        Ok(Self {
-            db: match env::var("DB_PATH").ok() {
-                Some(path) => DbConfig::Persistent { path },
-                None => DbConfig::Temporary,
-            },
-            server_address: env::var("SERVER_ADDR").context("SERVER_ADDR not set")?,
-            otel_endpoint: env::var("OTEL_ENDPOINT").ok(),
-        })
-    }
-}
-
-pub struct AppState {
-    pub db: Arc<AppDb>,
-    pub event_bus: EventBus,
-}
-
-#[tracing::instrument(skip(state))]
-async fn handle_event(
-    State(state): State<Arc<AppState>>,
-    Json(event): Json<ServerEvent>,
-) -> Result<Json<Vec<ServerEffect>>, (StatusCode, String)> {
-    let receiver = state
-        .event_bus
-        .submit(&event)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let effects = receiver
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(effects))
-}
+use server::app_db::AppDb;
+use server::error::AppResult;
+use server::event_bus::EventBus;
+use server::{AppConfig, AppState, handle_event};
 
 fn init_tracing(config: &AppConfig) -> AppResult<()> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -164,7 +109,7 @@ mod test {
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_tree::HierarchicalLayer;
 
-    use crate::testing::{dispatch_event, spin_up};
+    use server::testing::{dispatch_event, spin_up};
 
     fn init_test_tracing() {
         let filter = tracing_subscriber::EnvFilter::new("server=debug");
@@ -187,7 +132,7 @@ mod test {
         let effects = dispatch_event(
             &state,
             ServerEvent::Account(account::ServerEvent::Register {
-                username: "alice".into(),
+                email: "alice".into(),
                 password: "password123".into(),
             }),
         )

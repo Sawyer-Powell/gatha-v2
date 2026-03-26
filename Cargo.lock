@@ -183,6 +183,7 @@ dependencies = [
  "diff-struct",
  "futures",
  "gloo-net",
+ "js-sys",
  "log",
  "serde",
  "serde-wasm-bindgen",
@@ -192,6 +193,15 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+]
+
+[[package]]
+name = "client-wasm"
+version = "0.1.0"
+dependencies = [
+ "client",
+ "common",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -280,6 +290,17 @@ name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
+name = "e2e"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "client",
+ "common",
+ "server",
+ "tokio",
+]
 
 [[package]]
 name = "either"

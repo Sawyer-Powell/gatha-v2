@@ -23,7 +23,7 @@ pub struct Account {
 }
 
 pub struct AccountStore {
-    accounts: Tree,
+    pub accounts: Tree,
 }
 
 impl AccountStore {
@@ -85,22 +85,22 @@ impl EventProcessor for AccountStore {
         event: &Self::Event,
         store: &AppEventStore,
     ) -> AppResult<Vec<Self::Effect>> {
-        let effects = transaction(
+        transaction(
             &(&self.accounts, &store.cursor),
             |(tx_accounts, tx_cursor)| {
                 let mut effects: Vec<Self::Effect> = Vec::new();
 
                 match event {
-                    account::ServerEvent::SignIn { username, password } => {
-                        let success = self.sign_in(username, password, tx_accounts)?;
+                    account::ServerEvent::SignIn { email, password } => {
+                        let success = self.sign_in(email, password, tx_accounts)?;
                         if success {
                             effects.push(account::ServerEffect::SignInSuccess);
                         } else {
                             effects.push(account::ServerEffect::SignInFailed);
                         }
                     }
-                    account::ServerEvent::Register { username, password } => {
-                        self.register(username, password, tx_accounts)?;
+                    account::ServerEvent::Register { email, password } => {
+                        self.register(email, password, tx_accounts)?;
                         effects.push(account::ServerEffect::RegistrationOk);
                     }
                 }
@@ -109,9 +109,7 @@ impl EventProcessor for AccountStore {
 
                 Ok(effects)
             },
-        )?;
-
-        Ok(effects)
+        )
     }
 }
 
