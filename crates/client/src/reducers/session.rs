@@ -135,10 +135,13 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                                         email: email.clone(),
                                         password: password.clone(),
                                         status: SignInStatus::InvalidCredentials,
-                                    }
+                                    };
+                                    state.page = Page::Home;
                                 });
                             }
-                            ServerEffect::Account(account::ServerEffect::SignInSuccess) => {
+                            ServerEffect::Account(account::ServerEffect::SignInSuccess {
+                                email: _,
+                            }) => {
                                 next = mutate(&next, &|state| {
                                     state.auth = AuthState::SignedIn {
                                         email: email.clone(),

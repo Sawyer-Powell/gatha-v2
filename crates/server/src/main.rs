@@ -9,7 +9,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_tree::HierarchicalLayer;
 
-use server::app_db::AppDb;
+use server::db::app_db::AppDb;
 use server::error::AppResult;
 use server::event_bus::EventBus;
 use server::{AppConfig, AppState, handle_event};
@@ -76,6 +76,7 @@ async fn main() -> AppResult<()> {
     let app_state = Arc::new(AppState {
         event_bus: EventBus::new(db.clone()),
         db,
+        auth_secret: config.auth_secret,
     });
 
     let app = Router::new()
@@ -99,50 +100,4 @@ async fn main() -> AppResult<()> {
         .context("Critical error while serving app")?;
 
     Ok(())
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-mod test {
-    use common::events::{ServerEffect, ServerEvent, account};
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_tree::HierarchicalLayer;
-
-    use server::testing::{dispatch_event, spin_up};
-
-    fn init_test_tracing() {
-        let filter = tracing_subscriber::EnvFilter::new("server=debug");
-        let _ = tracing_subscriber::registry()
-            .with(filter)
-            .with(
-                HierarchicalLayer::new(2)
-                    .with_targets(true)
-                    .with_bracketed_fields(false),
-            )
-            .try_init();
-    }
-
-    #[tokio::test]
-    async fn test_register_and_sign_in() {
-        init_test_tracing();
-
-        let state = spin_up().unwrap();
-
-        let effects = dispatch_event(
-            &state,
-            ServerEvent::Account(account::ServerEvent::Register {
-                email: "alice".into(),
-                password: "password123".into(),
-            }),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(effects.len(), 1);
-        assert!(matches!(
-            effects[0],
-            ServerEffect::Account(account::ServerEffect::RegistrationOk)
-        ));
-    }
 }

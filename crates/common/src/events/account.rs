@@ -18,6 +18,7 @@ pub enum ServerEvent {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerEffect {
     RegistrationOk,
+    RegistrationDuplicate,
     SignInFailed,
-    SignInSuccess,
+    SignInSuccess { email: String },
 }

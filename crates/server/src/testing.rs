@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::{AppConfig, AppState, DbConfig, app_db::AppDb, error::AppResult, event_bus::EventBus};
+use crate::{
+    AppConfig, AppState, DbConfig, db::app_db::AppDb, error::AppResult, event_bus::EventBus,
+};
 use anyhow::Context;
 use common::events::*;
 
@@ -11,6 +13,7 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
         db: DbConfig::Temporary,
         otel_endpoint: None,
         server_address: "0.0.0.0:3000".to_string(),
+        auth_secret: [0x00; 32],
     };
 
     let db = Arc::new(AppDb::new(&config)?);
@@ -18,6 +21,7 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
     let app_state = Arc::new(AppState {
         event_bus: EventBus::new(db.clone()),
         db,
+        auth_secret: config.auth_secret,
     });
 
     Ok(app_state)
@@ -25,7 +29,7 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
 
 pub async fn dispatch_event(
     app_state: &Arc<AppState>,
-    event: ServerEvent,
+    event: ServerEventWrapped,
 ) -> AppResult<Vec<ServerEffect>> {
     let receiver = app_state.event_bus.submit(&event)?;
     let effects = receiver

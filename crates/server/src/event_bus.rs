@@ -5,12 +5,14 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 
 use common::events::*;
-use common::traits::*;
 
-use crate::{app_db::AppDb, error::AppResult};
+use crate::{
+    db::{EventProcessor, EventStore, app_db::AppDb},
+    error::AppResult,
+};
 
 struct EventMessage {
-    event: ServerEvent,
+    event: ServerEventWrapped,
     waiter: oneshot::Sender<Vec<ServerEffect>>,
     caller_span: tracing::Span,
 }
@@ -63,7 +65,10 @@ impl EventBus {
         Self { sender }
     }
 
-    pub fn submit(&self, event: &ServerEvent) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
+    pub fn submit(
+        &self,
+        event: &ServerEventWrapped,
+    ) -> AppResult<oneshot::Receiver<Vec<ServerEffect>>> {
         let (waiter, receiver) = oneshot::channel();
         let caller_span = tracing::Span::current();
 
