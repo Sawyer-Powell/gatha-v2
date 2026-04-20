@@ -7,6 +7,7 @@ pub mod rbac;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerEvent {
     Account(account::ServerEvent),
+    WhoAmI,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -47,4 +48,6 @@ impl ServerEventWrapped {
 pub enum ServerEffect {
     Account(account::ServerEffect),
     Rbac(rbac::RbacEffect),
+    WhoAmI { email: String },
+    SessionExpired,
 }

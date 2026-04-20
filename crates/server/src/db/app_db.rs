@@ -56,6 +56,9 @@ impl EventProcessor for AppDb {
                 .into_iter()
                 .map(events::ServerEffect::Account)
                 .collect(),
+            events::ServerEvent::WhoAmI => {
+                vec![]
+            }
         };
 
         Ok(effects)

@@ -1,16 +1,16 @@
 <script lang="ts">
-    import DesignSystem from "$lib/design-system/DesignSystem.svelte";
     import SignIn from "$lib/pages/auth/SignIn.svelte";
     import Page from "$lib/pages/Page.svelte";
+    import { getStore } from "$lib/store.svelte";
 
-    let route = $state(window.location.hash || "#/");
-    window.addEventListener("hashchange", () => (route = window.location.hash));
+    const store = $derived(getStore());
+    const page = $derived(store.session.page);
 </script>
 
-{#if route === "#/design-system"}
-    <DesignSystem />
-{:else if route === "#/"}
+{#if page === "Home"}
     <Page />
-{:else}
+{:else if typeof page === "object" && "SignIn" in page}
     <SignIn />
+{:else if typeof page === "object" && "PasswordReset" in page}
+    <p>Password reset (TODO)</p>
 {/if}

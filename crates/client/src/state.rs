@@ -1,5 +1,5 @@
 use diff::Diff;
-use serde::{Deserialize, Serialize};
+use macro_rules_attribute::apply;
 
 use crate::ServerEventDispatcher;
 use crate::error::ClientResult;
@@ -50,19 +50,13 @@ pub fn make_mutation<S: 'static + Clone + Diff, R: 'static + Clone>(
     }
 }
 
-#[derive(Serialize, Clone, Default, Diff, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
-#[diff(attr(
-    #[derive(Serialize, Clone, Debug)]
-))]
+#[apply(client_state)]
+#[derive(Default)]
 pub struct AppStore {
     pub session: SessionState,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[apply(client_event)]
 pub enum UIEvent {
     Session(SessionUIEvent),
 }

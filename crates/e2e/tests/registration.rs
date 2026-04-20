@@ -4,7 +4,7 @@ mod tests {
     use std::rc::Rc;
 
     use client::{
-        reducers::session::{AuthState, AuthUIEvent, Page, SessionUIEvent},
+        reducers::session::{AppPage, AuthState, AuthUIEvent, SessionUIEvent},
         state::{AppStore, Store, UIEvent},
     };
     use e2e::TestDispatcher;
@@ -48,6 +48,6 @@ mod tests {
             AuthState::SignedIn { .. }
         ));
 
-        assert!(matches!(client_store.session.page, Page::Home));
+        assert!(matches!(client_store.session.page, AppPage::Home));
     }
 }

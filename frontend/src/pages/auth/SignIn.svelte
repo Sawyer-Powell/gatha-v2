@@ -9,18 +9,29 @@
     import Link from "$lib/design-system/typography/Link.svelte";
     import ScrollingText from "$lib/pages/auth/ScrollingText.svelte";
     import { EnvelopeIcon, LockIcon } from "phosphor-svelte";
+    import { dispatch, getStore } from "$lib/store.svelte";
 
-    let email = $state("");
-    let password = $state("");
-    let signingIn = $state(false);
-    let registering = $state(false);
+    const store = $derived(getStore());
+    const page = $derived(
+        typeof store.session.page === "object" && "SignIn" in store.session.page
+            ? store.session.page.SignIn
+            : null,
+    );
 
     function handleSignIn() {
-        signingIn = true;
+        dispatch({ Session: "SignIn" });
     }
 
     function handleRegister() {
-        registering = true;
+        dispatch({ Session: "Register" });
+    }
+
+    function updateEmail(value: string) {
+        dispatch({ Session: { Auth: { UpdateEmail: value } } });
+    }
+
+    function updatePassword(value: string) {
+        dispatch({ Session: { Auth: { UpdatePassword: value } } });
     }
 </script>
 
@@ -38,8 +49,8 @@
                         placeholder="Email"
                         type="email"
                         icon={EnvelopeIcon}
-                        value={email}
-                        oninput={(v) => (email = v)}
+                        value={page?.email ?? ""}
+                        oninput={updateEmail}
                     />
                     <VStack gap="xs">
                         <HStack justify="end">
@@ -51,18 +62,18 @@
                             placeholder="Password"
                             type="password"
                             icon={LockIcon}
-                            value={password}
-                            oninput={(v) => (password = v)}
+                            value={page?.password ?? ""}
+                            oninput={updatePassword}
                         />
                     </VStack>
                     <Spacer size="sm" />
                     <HStack gap="sm" justify="center">
-                        <Button loading={signingIn} onclick={handleSignIn}
+                        <Button loading={page?.status === "Loading"} onclick={handleSignIn}
                             >Sign in</Button
                         >
                         <Button
                             variant="ghost"
-                            loading={registering}
+                            loading={page?.status === "Loading"}
                             onclick={handleRegister}>Register</Button
                         >
                     </HStack>

@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use common::events::ServerEventWrapped;
 use futures::{StreamExt, channel::mpsc};
 use gloo_net::http::Request;
 use wasm_bindgen::JsValue;
@@ -18,7 +19,12 @@ impl ServerEventDispatcher for GlooServerDispatcher {
         &self,
         event: &common::events::ServerEvent,
     ) -> ClientResult<Vec<common::events::ServerEffect>> {
-        let resp = Request::post("/ev").json(event)?.send().await?;
+        let resp = Request::post("/ev").json(
+            &ServerEventWrapped {
+                auth: None, // auth info comes from cookie on request
+                event: event.clone()
+            }
+        )?.send().await?;
         Ok(resp.json().await?)
     }
 }

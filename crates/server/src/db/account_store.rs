@@ -189,4 +189,123 @@ mod test {
             _ => panic!("account does not exist in store after registration"),
         }
     }
+
+    async fn register_account(
+        state: &std::sync::Arc<crate::AppState>,
+        email: &str,
+        password: &str,
+    ) {
+        dispatch_event(
+            state,
+            ServerEventWrapped {
+                auth: None,
+                event: ServerEvent::Account(account::ServerEvent::Register {
+                    email: email.into(),
+                    password: password.into(),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_sign_in_success() {
+        let state = spin_up().unwrap();
+        let test_email = "signin@example.com";
+        let test_pass = "testpassword";
+
+        register_account(&state, test_email, test_pass).await;
+
+        let sign_in_time = Utc::now();
+
+        let effects = dispatch_event(
+            &state,
+            ServerEventWrapped {
+                auth: None,
+                event: ServerEvent::Account(account::ServerEvent::SignIn {
+                    email: test_email.into(),
+                    password: test_pass.into(),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+        let after_sign_in = Utc::now();
+
+        assert_eq!(effects.len(), 1, "sign in should produce one effect");
+        assert!(
+            matches!(
+                &effects[0],
+                ServerEffect::Account(account::ServerEffect::SignInSuccess { email }) if email == test_email
+            ),
+            "sign in should produce SignInSuccess with correct email"
+        );
+
+        // Verify last_login was updated in the db
+        let data = state
+            .db
+            .account_store
+            .accounts
+            .get(test_email.as_bytes())
+            .unwrap()
+            .expect("account should exist after sign in");
+        let account = rmp_serde::from_slice::<Account>(&data).unwrap();
+        assert!(
+            account.last_login >= sign_in_time && account.last_login <= after_sign_in,
+            "last_login should be updated to sign in time"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_in_wrong_password() {
+        let state = spin_up().unwrap();
+        let test_email = "wrongpass@example.com";
+
+        register_account(&state, test_email, "correctpassword").await;
+
+        let effects = dispatch_event(
+            &state,
+            ServerEventWrapped {
+                auth: None,
+                event: ServerEvent::Account(account::ServerEvent::SignIn {
+                    email: test_email.into(),
+                    password: "wrongpassword".into(),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(effects.len(), 1);
+        assert!(
+            matches!(&effects[0], ServerEffect::Account(account::ServerEffect::SignInFailed)),
+            "sign in with wrong password should produce SignInFailed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_in_nonexistent_user() {
+        let state = spin_up().unwrap();
+
+        let effects = dispatch_event(
+            &state,
+            ServerEventWrapped {
+                auth: None,
+                event: ServerEvent::Account(account::ServerEvent::SignIn {
+                    email: "nobody@example.com".into(),
+                    password: "anypassword".into(),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(effects.len(), 1);
+        assert!(
+            matches!(&effects[0], ServerEffect::Account(account::ServerEffect::SignInFailed)),
+            "sign in with nonexistent user should produce SignInFailed"
+        );
+    }
 }

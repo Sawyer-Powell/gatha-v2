@@ -1,11 +1,16 @@
 import { mount } from "svelte";
 import App from "$lib/App.svelte";
 import { body, lightTheme } from "./app.css";
+import { initialize } from "$lib/store.svelte";
 
-const app = mount(App, {
-  target: document.getElementById("app")!,
-});
+async function main() {
+  await initialize();
 
-document.body.classList.add(lightTheme, body);
+  document.body.classList.add(lightTheme, body);
 
-export default app;
+  mount(App, {
+    target: document.getElementById("app")!,
+  });
+}
+
+main();

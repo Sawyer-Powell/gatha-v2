@@ -14,6 +14,8 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
         otel_endpoint: None,
         server_address: "0.0.0.0:3000".to_string(),
         auth_secret: [0x00; 32],
+        tls_cert: String::new(),
+        tls_key: String::new(),
     };
 
     let db = Arc::new(AppDb::new(&config)?);

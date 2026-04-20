@@ -23,6 +23,8 @@ impl TestDispatcher {
             otel_endpoint: None,
             server_address: "0.0.0.0:0".to_string(),
             auth_secret: [0x00; 32],
+            tls_cert: String::new(),
+            tls_key: String::new(),
         };
 
         let db = Arc::new(AppDb::new(&config)?);

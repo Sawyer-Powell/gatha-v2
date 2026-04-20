@@ -1,6 +1,5 @@
 use common::events::{ServerEffect, ServerEvent, account};
-use diff::Diff;
-use serde::{Deserialize, Serialize};
+use macro_rules_attribute::apply;
 
 use crate::{
     ServerEventDispatcher,
@@ -8,12 +7,8 @@ use crate::{
     state::{Mutate, Reducer},
 };
 
-#[derive(Serialize, Clone, Default, Diff, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
-#[diff(attr(
-    #[derive(Serialize, Clone, Debug)]
-))]
+#[apply(client_state)]
+#[derive(Default, PartialEq)]
 pub enum SignInStatus {
     #[default]
     Ready,
@@ -21,70 +16,56 @@ pub enum SignInStatus {
     InvalidCredentials,
 }
 
-#[derive(Serialize, Clone, Debug, Diff, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
-#[diff(attr(
-    #[derive(Serialize, Clone, Debug)]
-))]
+#[apply(client_state)]
+#[derive(Default, PartialEq)]
 pub enum AuthState {
-    SignedOut {
-        email: String,
-        password: String,
-        status: SignInStatus,
-    },
+    #[default]
+    SignedOut,
     SignedIn {
         email: String,
     },
 }
 
-impl Default for AuthState {
+#[apply(client_state)]
+pub enum AppPage {
+    SignIn {
+        email: String,
+        password: String,
+        status: SignInStatus,
+    },
+    Home,
+    PasswordReset {
+        email: String,
+    },
+}
+
+impl Default for AppPage {
     fn default() -> Self {
-        Self::SignedOut {
-            email: "".into(),
-            password: "".into(),
+        Self::SignIn {
+            email: String::new(),
+            password: String::new(),
             status: SignInStatus::default(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Diff, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
-#[diff(attr(
-    #[derive(Serialize, Clone, Debug)]
-))]
-pub enum Page {
-    #[default]
-    SignIn,
-    PasswordReset,
-    Home,
-}
-
-#[derive(Serialize, Clone, Default, Diff, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
-#[diff(attr(
-    #[derive(Serialize, Clone, Debug)]
-))]
+#[apply(client_state)]
+#[derive(Default)]
 pub struct SessionState {
-    pub page: Page,
     pub auth: AuthState,
+    pub page: AppPage,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[apply(client_event)]
 pub enum AuthUIEvent {
     UpdateEmail(String),
     UpdatePassword(String),
 }
 
-#[derive(Deserialize, Clone, Debug)]
-#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[apply(client_event)]
 pub enum SessionUIEvent {
-    ChangePage(Page),
+    ChangePage(AppPage),
+    WhoAmI(AppPage),
     SignIn,
     Register,
     Auth(AuthUIEvent),
@@ -101,15 +82,40 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
     ) -> ClientResult<Self> {
         let mut next = self.clone().to_owned();
         match event {
+            SessionUIEvent::WhoAmI(requested_page) => match next.auth {
+                AuthState::SignedIn { .. } => {
+                    next = mutate(&next, &|state| state.page = requested_page.clone());
+                }
+                AuthState::SignedOut => {
+                    let effects = dispatcher.dispatch(&ServerEvent::WhoAmI).await?;
+
+                    for effect in effects {
+                        match effect {
+                            ServerEffect::WhoAmI { email } => {
+                                next = mutate(&next, &|state| {
+                                    state.auth =
+                                        AuthState::SignedIn { email: email.clone() };
+                                    state.page = requested_page.clone();
+                                });
+                            }
+                            ServerEffect::SessionExpired => {
+                                next = mutate(&next, &|state| {
+                                    state.page = AppPage::default();
+                                });
+                            }
+                            _ => {
+                                return Err(anyhow::anyhow!("Unexpected effect from WhoAmI"));
+                            }
+                        }
+                    }
+                }
+            },
             SessionUIEvent::ChangePage(page) => match next.auth {
                 AuthState::SignedIn { .. } => {
                     next = mutate(&next, &|state| state.page = page.clone());
                 }
-                AuthState::SignedOut { .. } => match page {
-                    Page::SignIn => {
-                        next = mutate(&next, &|state| state.page = page.clone());
-                    }
-                    Page::PasswordReset => {
+                AuthState::SignedOut => match page {
+                    AppPage::SignIn { .. } | AppPage::PasswordReset { .. } => {
                         next = mutate(&next, &|state| state.page = page.clone());
                     }
                     _ => {
@@ -117,99 +123,114 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                     }
                 },
             },
-            SessionUIEvent::SignIn => match next.auth.clone() {
-                AuthState::SignedOut {
-                    email, password, ..
-                } => {
-                    let effects = dispatcher
-                        .dispatch(&ServerEvent::Account(account::ServerEvent::SignIn {
-                            email: email.clone(),
-                            password: password.clone(),
-                        }))
-                        .await?;
-                    for effect in effects {
-                        match effect {
-                            ServerEffect::Account(account::ServerEffect::SignInFailed) => {
-                                next = mutate(&next, &|state| {
-                                    state.auth = AuthState::SignedOut {
-                                        email: email.clone(),
-                                        password: password.clone(),
-                                        status: SignInStatus::InvalidCredentials,
-                                    };
-                                    state.page = Page::Home;
-                                });
-                            }
-                            ServerEffect::Account(account::ServerEffect::SignInSuccess {
-                                email: _,
-                            }) => {
-                                next = mutate(&next, &|state| {
-                                    state.auth = AuthState::SignedIn {
-                                        email: email.clone(),
-                                    };
-                                    state.page = Page::Home;
-                                });
-                            }
-                            _ => {
-                                return Err(anyhow::anyhow!("Unexpected server effect"));
-                            }
-                        }
-                    }
-                }
-                _ => return Err(anyhow::anyhow!("Already signed in")),
-            },
-            SessionUIEvent::Register => match next.auth.clone() {
-                AuthState::SignedOut {
-                    email, password, ..
-                } => {
-                    let effects = dispatcher
-                        .dispatch(&ServerEvent::Account(account::ServerEvent::Register {
-                            email: email.clone(),
-                            password: password.clone(),
-                        }))
-                        .await?;
+            SessionUIEvent::SignIn => {
+                let AppPage::SignIn {
+                    ref email,
+                    ref password,
+                    ..
+                } = next.page
+                else {
+                    return Err(anyhow::anyhow!("SignIn event requires SignIn page"));
+                };
+                let email = email.clone();
+                let password = password.clone();
 
-                    for effect in effects {
-                        match effect {
-                            ServerEffect::Account(account::ServerEffect::RegistrationOk) => {
-                                next = mutate(&next.clone(), &|state| {
-                                    state.auth = AuthState::SignedIn {
-                                        email: email.clone(),
-                                    };
-                                    state.page = Page::Home;
-                                });
-                            }
-                            _ => {
-                                return Err(anyhow::anyhow!("Unexpected server effect"));
-                            }
+                next = mutate(&next, &|state| {
+                    if let AppPage::SignIn { ref mut status, .. } = state.page {
+                        *status = SignInStatus::Loading;
+                    }
+                });
+
+                let effects = dispatcher
+                    .dispatch(&ServerEvent::Account(account::ServerEvent::SignIn {
+                        email: email.clone(),
+                        password: password.clone(),
+                    }))
+                    .await?;
+
+                for effect in effects {
+                    match effect {
+                        ServerEffect::Account(account::ServerEffect::SignInFailed) => {
+                            next = mutate(&next, &|state| {
+                                state.page = AppPage::SignIn {
+                                    email: email.clone(),
+                                    password: password.clone(),
+                                    status: SignInStatus::InvalidCredentials,
+                                };
+                            });
+                        }
+                        ServerEffect::Account(account::ServerEffect::SignInSuccess {
+                            email: _,
+                        }) => {
+                            next = mutate(&next, &|state| {
+                                state.auth = AuthState::SignedIn {
+                                    email: email.clone(),
+                                };
+                                state.page = AppPage::Home;
+                            });
+                        }
+                        _ => {
+                            return Err(anyhow::anyhow!("Unexpected server effect"));
                         }
                     }
                 }
-                _ => {
-                    next = mutate(&next, &|state| {
-                        state.page = Page::Home;
-                    });
+            }
+            SessionUIEvent::Register => {
+                let AppPage::SignIn {
+                    ref email,
+                    ref password,
+                    ..
+                } = next.page
+                else {
+                    return Err(anyhow::anyhow!("Register event requires SignIn page"));
+                };
+                let email = email.clone();
+                let password = password.clone();
+
+                let effects = dispatcher
+                    .dispatch(&ServerEvent::Account(account::ServerEvent::Register {
+                        email: email.clone(),
+                        password: password.clone(),
+                    }))
+                    .await?;
+
+                for effect in effects {
+                    match effect {
+                        ServerEffect::Account(account::ServerEffect::SignInSuccess {
+                            email,
+                        }) => {
+                            next = mutate(&next, &|state| {
+                                state.auth = AuthState::SignedIn {
+                                    email: email.clone(),
+                                };
+                                state.page = AppPage::Home;
+                            });
+                        }
+                        _ => {
+                            return Err(anyhow::anyhow!("Unexpected server effect"));
+                        }
+                    }
                 }
-            },
+            }
             SessionUIEvent::Auth(auth_event) => match auth_event {
                 AuthUIEvent::UpdateEmail(email) => {
                     next = mutate(&next, &|state| {
-                        if let AuthState::SignedOut {
-                            email: ref mut _email,
-                            ..
-                        } = state.auth
+                        if let AppPage::SignIn {
+                            email: ref mut e, ..
+                        } = state.page
                         {
-                            *_email = email.clone();
+                            *e = email.clone();
                         }
                     });
                 }
                 AuthUIEvent::UpdatePassword(password) => {
                     next = mutate(&next, &|state| {
-                        if let AuthState::SignedOut {
-                            password: ref mut _password,
+                        if let AppPage::SignIn {
+                            password: ref mut p,
                             ..
-                        } = state.auth
+                        } = state.page
                         {
-                            *_password = password.clone();
+                            *p = password.clone();
                         }
                     });
                 }

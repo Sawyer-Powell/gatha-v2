@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::{Router, routing::post};
+use axum_server::tls_rustls::RustlsConfig;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
 use tracing::instrument;
@@ -83,19 +84,18 @@ async fn main() -> AppResult<()> {
         .route("/ev", post(handle_event))
         .with_state(app_state);
 
-    let socket = tokio::net::TcpSocket::new_v4()?;
-    socket.set_reuseaddr(true)?;
-    socket
-        .bind(
-            config
-                .server_address
-                .parse()
-                .context("Could not parse address")?,
-        )
-        .context("Failed to bind to socket")?;
-    let listener = socket.listen(1024).context("Failed to bind to socket")?;
-    println!("Listening on {}", config.server_address);
-    axum::serve(listener, app)
+    let tls_config = RustlsConfig::from_pem_file(&config.tls_cert, &config.tls_key)
+        .await
+        .context("Failed to load TLS certs")?;
+
+    let addr: std::net::SocketAddr = config
+        .server_address
+        .parse()
+        .context("Could not parse address")?;
+
+    println!("Listening on https://{}", addr);
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(app.into_make_service())
         .await
         .context("Critical error while serving app")?;
 
