@@ -19,5 +19,5 @@ pub enum ServerEvent {
 pub enum ServerEffect {
     RegistrationDuplicate,
     SignInFailed,
-    SignInSuccess { email: String },
+    SignInSuccess { account_id: u64, email: String },
 }

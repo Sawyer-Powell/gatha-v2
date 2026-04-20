@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::auth::{hash_password, verify_password, verify_password_dummy};
 use chrono::{DateTime, Utc};
 use common::events::account;
@@ -11,37 +13,75 @@ use crate::error::AppResult;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Account {
-    email: String, // serves as unique identifier of user
+    pub id: u64,
+    pub email: String,
     password: String,
-    created: DateTime<Utc>,
-    last_login: DateTime<Utc>,
+    pub created: DateTime<Utc>,
+    pub last_login: DateTime<Utc>,
 }
 
 pub struct AccountStore {
     pub accounts: Tree,
+    pub accounts_by_email: Tree,
+    next_id: AtomicU64,
 }
 
 impl AccountStore {
+    pub fn new(accounts: Tree, accounts_by_email: Tree) -> Self {
+        let next_id = match accounts.last() {
+            Ok(Some((key, _))) => {
+                let bytes: [u8; 8] = key.as_ref().try_into().unwrap_or([0; 8]);
+                u64::from_be_bytes(bytes) + 1
+            }
+            _ => 1,
+        };
+
+        Self {
+            accounts,
+            accounts_by_email,
+            next_id: AtomicU64::new(next_id),
+        }
+    }
+
+    fn id_to_bytes(id: u64) -> [u8; 8] {
+        id.to_be_bytes()
+    }
+
+    pub fn get_by_id(&self, id: u64) -> AppResult<Option<Account>> {
+        let key = Self::id_to_bytes(id);
+        match self.accounts.get(key)? {
+            Some(data) => Ok(Some(rmp_serde::from_slice(&data)?)),
+            None => Ok(None),
+        }
+    }
+
     fn register(
         &self,
         email: &str,
         password: &str,
         tx_accounts: &TransactionalTree,
-    ) -> AppResult<bool> {
-        // Check to see if an existing account exists
-        if let Some(_) = tx_accounts.get(email.as_bytes())? {
-            return Ok(false);
+        tx_by_email: &TransactionalTree,
+    ) -> AppResult<Option<u64>> {
+        // Check if email already taken
+        if tx_by_email.get(email.as_bytes())?.is_some() {
+            return Ok(None);
         }
 
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let key = Self::id_to_bytes(id);
+
         let account = Account {
+            id,
             email: email.into(),
             password: hash_password(password)?,
             created: Utc::now(),
             last_login: Utc::now(),
         };
-        tx_accounts.insert(email.as_bytes(), rmp_serde::to_vec(&account)?)?;
 
-        Ok(true)
+        tx_accounts.insert(&key, rmp_serde::to_vec(&account)?)?;
+        tx_by_email.insert(email.as_bytes(), &key)?;
+
+        Ok(Some(id))
     }
 
     fn sign_in(
@@ -49,9 +89,15 @@ impl AccountStore {
         email: &str,
         password: &str,
         tx_accounts: &TransactionalTree,
-    ) -> AppResult<bool> {
-        let Some(data) = tx_accounts.get(email.as_bytes())? else {
-            return verify_password_dummy(password);
+        tx_by_email: &TransactionalTree,
+    ) -> AppResult<Option<u64>> {
+        let Some(id_bytes) = tx_by_email.get(email.as_bytes())? else {
+            verify_password_dummy(password)?;
+            return Ok(None);
+        };
+
+        let Some(data) = tx_accounts.get(&*id_bytes)? else {
+            return Ok(None);
         };
 
         let mut account = rmp_serde::from_slice::<Account>(&data)?;
@@ -59,10 +105,11 @@ impl AccountStore {
 
         if valid {
             account.last_login = Utc::now();
-            tx_accounts.insert(email.as_bytes(), rmp_serde::to_vec(&account)?)?;
+            tx_accounts.insert(&*id_bytes, rmp_serde::to_vec(&account)?)?;
+            Ok(Some(account.id))
+        } else {
+            Ok(None)
         }
-
-        Ok(valid)
     }
 }
 
@@ -78,34 +125,37 @@ impl EventProcessor for AccountStore {
         event: &Self::Event,
         store: &AppEventStore,
     ) -> AppResult<Vec<Self::Effect>> {
-        eventful_transaction(store, event_id, [&self.accounts], |[tx_accounts]| {
-            let mut effects: Vec<Self::Effect> = Vec::new();
+        eventful_transaction(
+            store,
+            event_id,
+            [&self.accounts, &self.accounts_by_email],
+            |[tx_accounts, tx_by_email]| {
+                let mut effects: Vec<Self::Effect> = Vec::new();
 
-            match event {
-                account::ServerEvent::SignIn { email, password } => {
-                    let success = self.sign_in(email, password, tx_accounts)?;
-                    if success {
-                        effects.push(account::ServerEffect::SignInSuccess {
-                            email: email.clone(),
-                        });
-                    } else {
-                        effects.push(account::ServerEffect::SignInFailed);
+                match event {
+                    account::ServerEvent::SignIn { email, password } => {
+                        match self.sign_in(email, password, tx_accounts, tx_by_email)? {
+                            Some(id) => effects.push(account::ServerEffect::SignInSuccess {
+                                account_id: id,
+                                email: email.clone(),
+                            }),
+                            None => effects.push(account::ServerEffect::SignInFailed),
+                        }
+                    }
+                    account::ServerEvent::Register { email, password } => {
+                        match self.register(email, password, tx_accounts, tx_by_email)? {
+                            Some(id) => effects.push(account::ServerEffect::SignInSuccess {
+                                account_id: id,
+                                email: email.clone(),
+                            }),
+                            None => effects.push(account::ServerEffect::RegistrationDuplicate),
+                        }
                     }
                 }
-                account::ServerEvent::Register { email, password } => {
-                    let account_created = self.register(email, password, tx_accounts)?;
-                    if account_created {
-                        effects.push(account::ServerEffect::SignInSuccess {
-                            email: email.clone(),
-                        })
-                    } else {
-                        effects.push(account::ServerEffect::RegistrationDuplicate);
-                    }
-                }
-            }
 
-            Ok(effects)
-        })
+                Ok(effects)
+            },
+        )
     }
 }
 
@@ -138,56 +188,70 @@ mod test {
         .await
         .unwrap();
 
-        assert!(
-            effects.len() == 1,
-            "registration event should only produce one effect"
-        );
-
-        assert!(
-            effects
-                .iter()
-                .filter(|e| {
-                    let ServerEffect::Account(account::ServerEffect::SignInSuccess { email }) = e
-                    else {
-                        return false;
-                    };
-                    email == &test_email.clone()
-                })
-                .count()
-                == 1,
-            "registration effect should only produce a sign in success effect, containing correct email"
-        );
-
         let end_time = Utc::now();
 
-        match state
+        assert_eq!(effects.len(), 1, "registration should produce one effect");
+
+        let ServerEffect::Account(account::ServerEffect::SignInSuccess { account_id, email }) =
+            &effects[0]
+        else {
+            panic!("expected SignInSuccess, got {:?}", effects[0]);
+        };
+        assert_eq!(email, &test_email);
+        assert!(*account_id > 0, "account_id should be positive");
+
+        // Verify account in DB by id
+        let account = state
             .db
             .account_store
-            .accounts
+            .get_by_id(*account_id)
+            .unwrap()
+            .expect("account should exist by id");
+
+        assert_eq!(account.email, test_email);
+        assert_ne!(account.password, test_pass, "password should be hashed");
+        assert!(account.created >= start_time && account.created <= end_time);
+        assert!(account.last_login >= start_time && account.last_login <= end_time);
+
+        // Verify email index points to the account
+        let id_from_email = state
+            .db
+            .account_store
+            .accounts_by_email
             .get(test_email.as_bytes())
             .unwrap()
-        {
-            Some(data) => {
-                let account = rmp_serde::from_slice::<Account>(&data).unwrap();
-                assert!(
-                    account.email == test_email,
-                    "account email in db should be email from event"
-                );
-                assert!(
-                    account.password != test_pass,
-                    "account pasword in db shouldn't match event's due to hashing"
-                );
-                assert!(
-                    account.created >= start_time && account.created <= end_time,
-                    "account creation time in db should be recent"
-                );
-                assert!(
-                    account.last_login >= start_time && account.last_login <= end_time,
-                    "account last login time in db should be recent"
-                );
-            }
-            _ => panic!("account does not exist in store after registration"),
-        }
+            .expect("email index should exist");
+        let id_bytes: [u8; 8] = id_from_email.as_ref().try_into().unwrap();
+        assert_eq!(u64::from_be_bytes(id_bytes), *account_id);
+    }
+
+    #[tokio::test]
+    async fn test_register_duplicate() {
+        let state = spin_up().unwrap();
+
+        register_account(&state, "dupe@example.com", "password").await;
+
+        let effects = dispatch_event(
+            &state,
+            ServerEventWrapped {
+                auth: None,
+                event: ServerEvent::Account(account::ServerEvent::Register {
+                    email: "dupe@example.com".into(),
+                    password: "password".into(),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(effects.len(), 1);
+        assert!(
+            matches!(
+                &effects[0],
+                ServerEffect::Account(account::ServerEffect::RegistrationDuplicate)
+            ),
+            "duplicate registration should produce RegistrationDuplicate"
+        );
     }
 
     async fn register_account(
@@ -235,27 +299,21 @@ mod test {
         let after_sign_in = Utc::now();
 
         assert_eq!(effects.len(), 1, "sign in should produce one effect");
-        assert!(
-            matches!(
-                &effects[0],
-                ServerEffect::Account(account::ServerEffect::SignInSuccess { email }) if email == test_email
-            ),
-            "sign in should produce SignInSuccess with correct email"
-        );
+        let ServerEffect::Account(account::ServerEffect::SignInSuccess { account_id, email }) =
+            &effects[0]
+        else {
+            panic!("expected SignInSuccess");
+        };
+        assert_eq!(email, test_email);
 
-        // Verify last_login was updated in the db
-        let data = state
+        // Verify last_login was updated
+        let account = state
             .db
             .account_store
-            .accounts
-            .get(test_email.as_bytes())
+            .get_by_id(*account_id)
             .unwrap()
-            .expect("account should exist after sign in");
-        let account = rmp_serde::from_slice::<Account>(&data).unwrap();
-        assert!(
-            account.last_login >= sign_in_time && account.last_login <= after_sign_in,
-            "last_login should be updated to sign in time"
-        );
+            .expect("account should exist");
+        assert!(account.last_login >= sign_in_time && account.last_login <= after_sign_in);
     }
 
     #[tokio::test]

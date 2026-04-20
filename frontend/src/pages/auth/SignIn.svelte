@@ -17,6 +17,16 @@
             ? store.session.page.SignIn
             : null,
     );
+    const errorMessage = $derived.by(() => {
+        const status = page?.status;
+        if (typeof status === "object" && status !== null && "ValidationError" in status) {
+            return status.ValidationError.message;
+        }
+        if (status === "InvalidCredentials") {
+            return "Invalid email or password";
+        }
+        return null;
+    });
 
     function handleSignIn() {
         dispatch({ Session: "SignIn" });
@@ -65,6 +75,9 @@
                             value={page?.password ?? ""}
                             oninput={updatePassword}
                         />
+                        {#if errorMessage}
+                            <p class="error">{errorMessage}</p>
+                        {/if}
                     </VStack>
                     <Spacer size="sm" />
                     <HStack gap="sm" justify="center">
@@ -93,5 +106,11 @@
     .content {
         position: relative;
         z-index: 1;
+    }
+
+    .error {
+        color: var(--color-error, #e53e3e);
+        font-size: 0.8rem;
+        margin: 0.25rem 0 0 0;
     }
 </style>

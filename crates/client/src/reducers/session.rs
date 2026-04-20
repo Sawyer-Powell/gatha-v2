@@ -14,6 +14,7 @@ pub enum SignInStatus {
     Ready,
     Loading,
     InvalidCredentials,
+    ValidationError { message: String },
 }
 
 #[apply(client_state)]
@@ -135,6 +136,20 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                 let email = email.clone();
                 let password = password.clone();
 
+                // Client-side validation
+                if let Err(msg) = common::validation::validate_email(&email)
+                    .and_then(|_| common::validation::validate_password(&password))
+                {
+                    next = mutate(&next, &|state| {
+                        if let AppPage::SignIn { ref mut status, .. } = state.page {
+                            *status = SignInStatus::ValidationError {
+                                message: msg.into(),
+                            };
+                        }
+                    });
+                    return Ok(next);
+                }
+
                 next = mutate(&next, &|state| {
                     if let AppPage::SignIn { ref mut status, .. } = state.page {
                         *status = SignInStatus::Loading;
@@ -160,7 +175,7 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                             });
                         }
                         ServerEffect::Account(account::ServerEffect::SignInSuccess {
-                            email: _,
+                            email: _, ..
                         }) => {
                             next = mutate(&next, &|state| {
                                 state.auth = AuthState::SignedIn {
@@ -187,6 +202,20 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                 let email = email.clone();
                 let password = password.clone();
 
+                // Client-side validation
+                if let Err(msg) = common::validation::validate_email(&email)
+                    .and_then(|_| common::validation::validate_password(&password))
+                {
+                    next = mutate(&next, &|state| {
+                        if let AppPage::SignIn { ref mut status, .. } = state.page {
+                            *status = SignInStatus::ValidationError {
+                                message: msg.into(),
+                            };
+                        }
+                    });
+                    return Ok(next);
+                }
+
                 let effects = dispatcher
                     .dispatch(&ServerEvent::Account(account::ServerEvent::Register {
                         email: email.clone(),
@@ -197,7 +226,7 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                 for effect in effects {
                     match effect {
                         ServerEffect::Account(account::ServerEffect::SignInSuccess {
-                            email,
+                            email, ..
                         }) => {
                             next = mutate(&next, &|state| {
                                 state.auth = AuthState::SignedIn {

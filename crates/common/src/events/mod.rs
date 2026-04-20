@@ -13,16 +13,25 @@ pub enum ServerEvent {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Auth {
     expires: DateTime<Utc>,
+    account_id: u64,
     email: String,
 }
 
 impl Auth {
-    pub fn new(email: String, expires: DateTime<Utc>) -> Self {
-        Self { email, expires }
+    pub fn new(account_id: u64, email: String, expires: DateTime<Utc>) -> Self {
+        Self {
+            account_id,
+            email,
+            expires,
+        }
     }
 
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires
+    }
+
+    pub fn account_id(&self) -> u64 {
+        self.account_id
     }
 
     pub fn email(&self) -> &str {

@@ -102,15 +102,26 @@ pub async fn handle_event(
 
     // Intercept whoami event
     if let ServerEvent::WhoAmI = event.event {
-        // WhoAmI requests don't hit event handler
-        // Simply contains decrypted info in auth token
         let empty_headers = header::HeaderMap::new();
         match event.auth {
             Some(auth) => {
-                let effect = ServerEffect::WhoAmI {
-                    email: auth.email().into(),
-                };
-                return Ok((empty_headers, Json(vec![effect])));
+                // Verify the account still exists in the DB
+                match state
+                    .db
+                    .account_store
+                    .get_by_id(auth.account_id())
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                {
+                    Some(account) => {
+                        let effect = ServerEffect::WhoAmI {
+                            email: account.email,
+                        };
+                        return Ok((empty_headers, Json(vec![effect])));
+                    }
+                    None => {
+                        return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
+                    }
+                }
             }
             None => {
                 return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
@@ -128,15 +139,18 @@ pub async fn handle_event(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // If sign-in succeeded, set the auth cookie
-    let sign_in_success_email = effects.iter().find_map(|effect| match effect {
-        ServerEffect::Account(account::ServerEffect::SignInSuccess { email }) => Some(email),
+    let sign_in = effects.iter().find_map(|effect| match effect {
+        ServerEffect::Account(account::ServerEffect::SignInSuccess { account_id, email }) => {
+            Some((*account_id, email.clone()))
+        }
         _ => None,
     });
 
     let mut response_headers = header::HeaderMap::new();
-    if let Some(email) = sign_in_success_email {
+    if let Some((account_id, email)) = sign_in {
         let auth = Auth::new(
-            email.clone(),
+            account_id,
+            email,
             Utc::now() + Duration::hours(AUTH_TOKEN_EXPIRY_HOURS),
         );
         let token = encrypt_auth(&auth, &state.auth_secret)

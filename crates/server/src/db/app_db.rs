@@ -29,9 +29,10 @@ impl AppDb {
                 cursor: db.open_tree("event_cursor")?,
                 next_id: AtomicU64::new(next_id),
             },
-            account_store: AccountStore {
-                accounts: db.open_tree("accounts")?,
-            },
+            account_store: AccountStore::new(
+                db.open_tree("accounts")?,
+                db.open_tree("accounts_by_email")?,
+            ),
             db,
         })
     }
@@ -49,13 +50,28 @@ impl EventProcessor for AppDb {
         event: &Self::Event,
         store: &AppEventStore,
     ) -> AppResult<Vec<Self::Effect>> {
+        use common::validation::{validate_email, validate_password};
+
         let effects = match &event.event {
-            events::ServerEvent::Account(account_event) => self
-                .account_store
-                .process_event(event_id, account_event, store)?
-                .into_iter()
-                .map(events::ServerEffect::Account)
-                .collect(),
+            events::ServerEvent::Account(account_event) => {
+                // Server-side sanity check — client should have validated already
+                let (email, password) = match account_event {
+                    common::events::account::ServerEvent::Register { email, password }
+                    | common::events::account::ServerEvent::SignIn { email, password } => {
+                        (email.as_str(), password.as_str())
+                    }
+                };
+
+                validate_email(email)
+                    .and_then(|_| validate_password(password))
+                    .map_err(|msg| anyhow::anyhow!("validation failed: {}", msg))?;
+
+                self.account_store
+                    .process_event(event_id, account_event, store)?
+                    .into_iter()
+                    .map(events::ServerEffect::Account)
+                    .collect()
+            }
             events::ServerEvent::WhoAmI => {
                 vec![]
             }

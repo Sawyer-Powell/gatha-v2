@@ -38,7 +38,7 @@ mod tests {
                 .state
                 .db
                 .account_store
-                .accounts
+                .accounts_by_email
                 .contains_key("sawyerhpowell@gmail.com")
                 .unwrap()
         );
