@@ -23,6 +23,8 @@ pub fn transaction<T: Transactional<anyhow::Error> + ?Sized, R>(
         })
 }
 
+/// Constructs a transaction against the database that also increments
+/// the event cursor
 pub fn eventful_transaction<E, const N: usize>(
     store: &event_store::AppEventStore,
     event_id: &DbKey,

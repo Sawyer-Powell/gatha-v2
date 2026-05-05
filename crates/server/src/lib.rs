@@ -103,30 +103,25 @@ pub async fn handle_event(
     // Intercept whoami event
     if let ServerEvent::WhoAmI = event.event {
         let empty_headers = header::HeaderMap::new();
-        match event.auth {
-            Some(auth) => {
-                // Verify the account still exists in the DB
-                match state
-                    .db
-                    .account_store
-                    .get_by_id(auth.account_id())
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-                {
-                    Some(account) => {
-                        let effect = ServerEffect::WhoAmI {
-                            email: account.email,
-                        };
-                        return Ok((empty_headers, Json(vec![effect])));
-                    }
-                    None => {
-                        return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
-                    }
-                }
-            }
-            None => {
-                return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
-            }
-        }
+
+        let Some(auth) = event.auth else {
+            return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
+        };
+
+        let Some(account) = state
+            .db
+            .account_store
+            .get_by_id(auth.account_id())
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        else {
+            return Ok((empty_headers, Json(vec![ServerEffect::SessionExpired])));
+        };
+
+        let effect = ServerEffect::WhoAmI {
+            email: account.email,
+        };
+
+        return Ok((empty_headers, Json(vec![effect])));
     }
 
     let receiver = state
@@ -174,11 +169,12 @@ pub async fn handle_event(
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
 mod test {
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use axum::routing::post;
-    use axum::Router;
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
@@ -237,7 +233,10 @@ mod test {
         let app = app();
 
         let response = app
-            .oneshot(json_request(&register_event("test@example.com", "testpassword")))
+            .oneshot(json_request(&register_event(
+                "test@example.com",
+                "testpassword",
+            )))
             .await
             .unwrap();
 
@@ -245,7 +244,10 @@ mod test {
 
         // Should have a Set-Cookie header with auth_token
         let cookie = extract_set_cookie(&response);
-        assert!(cookie.is_some(), "registration should set an auth_token cookie");
+        assert!(
+            cookie.is_some(),
+            "registration should set an auth_token cookie"
+        );
 
         // Cookie should be non-empty and decodable
         let token = cookie.unwrap();
@@ -264,12 +266,15 @@ mod test {
         // First, register to get an auth cookie
         let register_response = app
             .clone()
-            .oneshot(json_request(&register_event("whoami@example.com", "testpassword")))
+            .oneshot(json_request(&register_event(
+                "whoami@example.com",
+                "testpassword",
+            )))
             .await
             .unwrap();
 
-        let token = extract_set_cookie(&register_response)
-            .expect("registration should set auth cookie");
+        let token =
+            extract_set_cookie(&register_response).expect("registration should set auth cookie");
 
         // Now send a WhoAmI request with the cookie
         let whoami_request = Request::builder()
@@ -297,10 +302,7 @@ mod test {
     async fn test_whoami_without_cookie() {
         let app = app();
 
-        let response = app
-            .oneshot(json_request(&whoami_event()))
-            .await
-            .unwrap();
+        let response = app.oneshot(json_request(&whoami_event())).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 

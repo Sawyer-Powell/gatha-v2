@@ -6,7 +6,7 @@ import init, {
 } from "$wasm/client_wasm";
 import { applyDiff } from "$lib/utils/applyDiff";
 
-type PageName = "SignIn" | "Home" | "PasswordReset";
+type PageName = "Loading" | "SignIn" | "Home" | "PasswordReset";
 
 const routeToPage: Record<string, () => AppPage> = {
   "/": () => "Home",
@@ -14,7 +14,7 @@ const routeToPage: Record<string, () => AppPage> = {
   "/password-reset": () => ({ PasswordReset: { email: "" } }),
 };
 
-const pageNameToPath: Record<PageName, string> = {
+const pageNameToPath: Partial<Record<PageName, string>> = {
   Home: "/",
   SignIn: "/sign-in",
   PasswordReset: "/password-reset",
@@ -26,16 +26,17 @@ function pageFromUrl(): AppPage {
 }
 
 function getPageName(page: AppPage): PageName {
+  if (page === "Loading") return "Loading";
   if (page === "Home") return "Home";
   if (typeof page === "object" && "SignIn" in page) return "SignIn";
   if (typeof page === "object" && "PasswordReset" in page) return "PasswordReset";
-  return "Home";
+  return "Loading";
 }
 
 let store = $state<AppStore>({
   session: {
     auth: "SignedOut",
-    page: { SignIn: { email: "", password: "", status: "Ready" } },
+    page: "Loading",
   },
 });
 

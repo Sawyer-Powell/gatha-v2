@@ -84,6 +84,8 @@ impl AccountStore {
         Ok(Some(id))
     }
 
+    /// Performs sign in, checks the provided email and password against
+    /// the database. Returns an Ok(id) containing the account.id on sign in success
     fn sign_in(
         &self,
         email: &str,
@@ -161,8 +163,8 @@ impl EventProcessor for AccountStore {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
 mod test {
-    use crate::db::account_store::Account;
     use crate::testing::{dispatch_event, spin_up};
     use chrono::Utc;
     use common::events::{ServerEffect, ServerEvent, ServerEventWrapped, account};
@@ -338,7 +340,10 @@ mod test {
 
         assert_eq!(effects.len(), 1);
         assert!(
-            matches!(&effects[0], ServerEffect::Account(account::ServerEffect::SignInFailed)),
+            matches!(
+                &effects[0],
+                ServerEffect::Account(account::ServerEffect::SignInFailed)
+            ),
             "sign in with wrong password should produce SignInFailed"
         );
     }
@@ -362,7 +367,10 @@ mod test {
 
         assert_eq!(effects.len(), 1);
         assert!(
-            matches!(&effects[0], ServerEffect::Account(account::ServerEffect::SignInFailed)),
+            matches!(
+                &effects[0],
+                ServerEffect::Account(account::ServerEffect::SignInFailed)
+            ),
             "sign in with nonexistent user should produce SignInFailed"
         );
     }

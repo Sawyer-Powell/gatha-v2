@@ -4,7 +4,7 @@ mod tests {
     use std::rc::Rc;
 
     use client::{
-        reducers::session::{AppPage, AuthState, AuthUIEvent, SessionUIEvent},
+        reducers::session::{AppPage, AuthState, AuthUIEvent, SessionUIEvent, SignInStatus},
         state::{AppStore, Store, UIEvent},
     };
     use e2e::TestDispatcher;
@@ -20,6 +20,14 @@ mod tests {
                 .await
                 .unwrap();
         };
+
+        // Navigate to SignIn page first (default is Loading)
+        process_event(UIEvent::Session(SessionUIEvent::ChangePage(AppPage::SignIn {
+            email: String::new(),
+            password: String::new(),
+            status: SignInStatus::default(),
+        })))
+        .await;
 
         process_event(UIEvent::Session(SessionUIEvent::Auth(
             AuthUIEvent::UpdateEmail("sawyerhpowell@gmail.com".into()),

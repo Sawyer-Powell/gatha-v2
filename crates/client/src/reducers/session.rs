@@ -28,7 +28,10 @@ pub enum AuthState {
 }
 
 #[apply(client_state)]
+#[derive(Default)]
 pub enum AppPage {
+    #[default]
+    Loading,
     SignIn {
         email: String,
         password: String,
@@ -38,16 +41,6 @@ pub enum AppPage {
     PasswordReset {
         email: String,
     },
-}
-
-impl Default for AppPage {
-    fn default() -> Self {
-        Self::SignIn {
-            email: String::new(),
-            password: String::new(),
-            status: SignInStatus::default(),
-        }
-    }
 }
 
 #[apply(client_state)]
@@ -101,7 +94,11 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                             }
                             ServerEffect::SessionExpired => {
                                 next = mutate(&next, &|state| {
-                                    state.page = AppPage::default();
+                                    state.page = AppPage::SignIn {
+                                        email: String::new(),
+                                        password: String::new(),
+                                        status: SignInStatus::default(),
+                                    };
                                 });
                             }
                             _ => {

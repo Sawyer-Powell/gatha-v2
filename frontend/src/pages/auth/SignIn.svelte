@@ -54,43 +54,45 @@
             <Logo />
             <Spacer size="sm" />
             <Card padding="lg">
-                <VStack gap="md">
-                    <Input
-                        placeholder="Email"
-                        type="email"
-                        icon={EnvelopeIcon}
-                        value={page?.email ?? ""}
-                        oninput={updateEmail}
-                    />
-                    <VStack gap="xs">
-                        <HStack justify="end">
-                            <Link href="#/forgot-password" size="xs"
-                                >Forgot password?</Link
-                            >
-                        </HStack>
-                        <Input
-                            placeholder="Password"
-                            type="password"
-                            icon={LockIcon}
-                            value={page?.password ?? ""}
-                            oninput={updatePassword}
-                        />
-                        {#if errorMessage}
-                            <p class="error">{errorMessage}</p>
-                        {/if}
-                    </VStack>
-                    <Spacer size="sm" />
-                    <HStack gap="sm" justify="center">
-                        <Button loading={page?.status === "Loading"} onclick={handleSignIn}
-                            >Sign in</Button
-                        >
-                        <Button
-                            variant="ghost"
-                            loading={page?.status === "Loading"}
-                            onclick={handleRegister}>Register</Button
-                        >
-                    </HStack>
-                </VStack>
+		    <form onsubmit={(ev) => { ev.preventDefault(); handleSignIn();}}>
+			<VStack gap="md">
+			    <Input
+				placeholder="Email"
+				type="email"
+				icon={EnvelopeIcon}
+				value={page?.email ?? ""}
+				oninput={updateEmail}
+			    />
+			    <VStack gap="xs">
+				<HStack justify="end">
+				    <Link href="#/forgot-password" size="xs"
+					>Forgot password?</Link
+				    >
+				</HStack>
+				<Input
+				    placeholder="Password"
+				    type="password"
+				    icon={LockIcon}
+				    value={page?.password ?? ""}
+				    oninput={updatePassword}
+				/>
+				{#if errorMessage}
+				    <p class="error">{errorMessage}</p>
+				{/if}
+			    </VStack>
+			    <Spacer size="xs" />
+			    <HStack gap="sm" justify="center">
+				<Button loading={page?.status === "Loading"} onclick={handleSignIn}
+				    >Sign in</Button
+				>
+				<Button
+				    variant="ghost"
+				    loading={page?.status === "Loading"}
+				    onclick={handleRegister}>Register</Button
+				>
+			    </HStack>
+			</VStack>
+		</form>
             </Card>
         </VStack>
     </div>
