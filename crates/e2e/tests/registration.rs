@@ -9,37 +9,54 @@ mod tests {
     };
     use e2e::TestDispatcher;
 
+    async fn process_event(
+        client_store: &mut AppStore,
+        server_dispatcher: &TestDispatcher,
+        event: impl Into<UIEvent>,
+    ) {
+        client_store
+            .process_event(event.into(), Rc::new(|_| {}), server_dispatcher)
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn test_registration() {
         let mut client_store = AppStore::default();
         let server_dispatcher = TestDispatcher::new().unwrap();
 
-        let mut process_event = async |event: UIEvent| {
-            client_store
-                .process_event(event, Rc::new(|_| {}), &server_dispatcher)
-                .await
-                .unwrap();
-        };
-
         // Navigate to SignIn page first (default is Loading)
-        process_event(UIEvent::Session(SessionUIEvent::ChangePage(AppPage::SignIn {
-            email: String::new(),
-            password: String::new(),
-            status: SignInStatus::default(),
-        })))
+        process_event(
+            &mut client_store,
+            &server_dispatcher,
+            SessionUIEvent::ChangePage(AppPage::SignIn {
+                email: String::new(),
+                password: String::new(),
+                status: SignInStatus::default(),
+            }),
+        )
         .await;
 
-        process_event(UIEvent::Session(SessionUIEvent::Auth(
+        process_event(
+            &mut client_store,
+            &server_dispatcher,
             AuthUIEvent::UpdateEmail("sawyerhpowell@gmail.com".into()),
-        )))
+        )
         .await;
 
-        process_event(UIEvent::Session(SessionUIEvent::Auth(
+        process_event(
+            &mut client_store,
+            &server_dispatcher,
             AuthUIEvent::UpdatePassword("password :)".into()),
-        )))
+        )
         .await;
 
-        process_event(UIEvent::Session(SessionUIEvent::Register)).await;
+        process_event(
+            &mut client_store,
+            &server_dispatcher,
+            SessionUIEvent::Register,
+        )
+        .await;
 
         assert!(
             server_dispatcher

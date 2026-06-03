@@ -14,7 +14,9 @@ pub enum SignInStatus {
     Ready,
     Loading,
     InvalidCredentials,
-    ValidationError { message: String },
+    ValidationError {
+        message: String,
+    },
 }
 
 #[apply(client_state)]
@@ -56,6 +58,12 @@ pub enum AuthUIEvent {
     UpdatePassword(String),
 }
 
+impl From<AuthUIEvent> for SessionUIEvent {
+    fn from(event: AuthUIEvent) -> Self {
+        Self::Auth(event)
+    }
+}
+
 #[apply(client_event)]
 pub enum SessionUIEvent {
     ChangePage(AppPage),
@@ -87,8 +95,9 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                         match effect {
                             ServerEffect::WhoAmI { email } => {
                                 next = mutate(&next, &|state| {
-                                    state.auth =
-                                        AuthState::SignedIn { email: email.clone() };
+                                    state.auth = AuthState::SignedIn {
+                                        email: email.clone(),
+                                    };
                                     state.page = requested_page.clone();
                                 });
                             }
@@ -172,7 +181,8 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                             });
                         }
                         ServerEffect::Account(account::ServerEffect::SignInSuccess {
-                            email: _, ..
+                            email: _,
+                            ..
                         }) => {
                             next = mutate(&next, &|state| {
                                 state.auth = AuthState::SignedIn {
@@ -223,7 +233,8 @@ impl<D: ServerEventDispatcher> Reducer<D> for SessionState {
                 for effect in effects {
                     match effect {
                         ServerEffect::Account(account::ServerEffect::SignInSuccess {
-                            email, ..
+                            email,
+                            ..
                         }) => {
                             next = mutate(&next, &|state| {
                                 state.auth = AuthState::SignedIn {

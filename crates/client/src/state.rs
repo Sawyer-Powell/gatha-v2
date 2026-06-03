@@ -3,7 +3,7 @@ use macro_rules_attribute::apply;
 
 use crate::ServerEventDispatcher;
 use crate::error::ClientResult;
-use crate::reducers::session::{SessionState, SessionUIEvent};
+use crate::reducers::session::{AuthUIEvent, SessionState, SessionUIEvent};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -59,6 +59,18 @@ pub struct AppStore {
 #[apply(client_event)]
 pub enum UIEvent {
     Session(SessionUIEvent),
+}
+
+impl From<SessionUIEvent> for UIEvent {
+    fn from(event: SessionUIEvent) -> Self {
+        Self::Session(event)
+    }
+}
+
+impl From<AuthUIEvent> for UIEvent {
+    fn from(event: AuthUIEvent) -> Self {
+        Self::Session(event.into())
+    }
 }
 
 impl<D: ServerEventDispatcher> Store<D> for AppStore {
