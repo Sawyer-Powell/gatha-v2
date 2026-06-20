@@ -19,6 +19,7 @@
     import Slider from "$lib/design-system/Slider.svelte";
     import Dropdown from "$lib/design-system/Dropdown.svelte";
     import Combobox from "$lib/design-system/Combobox.svelte";
+    import VideoPlayer from "$lib/design-system/VideoPlayer.svelte";
     import { MagnifyingGlass } from "phosphor-svelte";
 
     let switchOn = $state(false);
@@ -34,6 +35,14 @@
 
 <VStack gap="lg">
     <Logo />
+
+    <Spacer size="lg" />
+
+    <H2>Video Player</H2>
+    <VideoPlayer
+        title="diamond_sutra_292387.mp4"
+        src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+    />
 
     <Spacer size="sm" />
 
