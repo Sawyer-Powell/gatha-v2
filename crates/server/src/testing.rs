@@ -1,7 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
-    AppConfig, AppState, DbConfig, db::app_db::AppDb, error::AppResult, event_bus::EventBus,
+    AppConfig, AppState, DbConfig,
+    activities::email::LogEmailProvider,
+    activity_bus::ActivityBus,
+    db::{activity_db::ActivityDb, app_db::AppDb},
+    error::AppResult,
+    event_bus::EventBus,
 };
 use anyhow::Context;
 use common::events::*;
@@ -18,11 +23,14 @@ pub fn spin_up() -> AppResult<Arc<AppState>> {
         tls_key: String::new(),
     };
 
-    let db = Arc::new(AppDb::new(&config)?);
+    let app_db = Arc::new(AppDb::new(&config)?);
+    let activity_db = Arc::new(ActivityDb::new(&config)?);
 
     let app_state = Arc::new(AppState {
-        event_bus: EventBus::new(db.clone()),
-        db,
+        event_bus: EventBus::new(app_db.clone()),
+        activity_bus: ActivityBus::new(activity_db.clone(), Arc::new(LogEmailProvider)),
+        app_db,
+        activity_db,
         auth_secret: config.auth_secret,
     });
 

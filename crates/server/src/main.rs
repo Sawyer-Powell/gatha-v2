@@ -5,11 +5,14 @@ use axum::{Router, routing::post};
 use axum_server::tls_rustls::RustlsConfig;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
+use server::db::activity_db::ActivityDb;
 use tracing::instrument;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_tree::HierarchicalLayer;
 
+use server::activities::email::LogEmailProvider;
+use server::activity_bus::ActivityBus;
 use server::db::app_db::AppDb;
 use server::error::AppResult;
 use server::event_bus::EventBus;
@@ -72,11 +75,14 @@ async fn main() -> AppResult<()> {
     let config = AppConfig::from_env()?;
     init_tracing(&config)?;
 
-    let db = Arc::new(AppDb::new(&config)?);
+    let app_db = Arc::new(AppDb::new(&config)?);
+    let activity_db = Arc::new(ActivityDb::new(&config)?);
 
     let app_state = Arc::new(AppState {
-        event_bus: EventBus::new(db.clone()),
-        db,
+        event_bus: EventBus::new(app_db.clone()),
+        activity_bus: ActivityBus::new(activity_db.clone(), Arc::new(LogEmailProvider)),
+        activity_db,
+        app_db,
         auth_secret: config.auth_secret,
     });
 

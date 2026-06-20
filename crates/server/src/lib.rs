@@ -1,3 +1,5 @@
+pub mod activities;
+pub mod activity_bus;
 pub mod auth;
 pub mod db;
 pub mod error;
@@ -13,7 +15,9 @@ use axum::http::header;
 use axum::response::IntoResponse;
 use chrono::{Duration, Utc};
 
+use crate::activity_bus::ActivityBus;
 use crate::auth::{decrypt_auth, encrypt_auth};
+use crate::db::activity_db::ActivityDb;
 use crate::db::app_db::AppDb;
 use crate::error::AppResult;
 use crate::event_bus::EventBus;
@@ -21,7 +25,10 @@ use common::events::*;
 
 pub enum DbConfig {
     Temporary,
-    Persistent { path: String },
+    Persistent {
+        app_db_path: String,
+        activity_db_path: String,
+    },
 }
 
 pub struct AppConfig {
@@ -49,9 +56,15 @@ impl AppConfig {
             .map_err(|_| anyhow::anyhow!("AUTH_SECRET must be exactly 32 bytes (64 hex chars)"))?;
 
         Ok(Self {
-            db: match env::var("DB_PATH").ok() {
-                Some(path) => DbConfig::Persistent { path },
-                None => DbConfig::Temporary,
+            db: match (
+                env::var("APP_DB_PATH").ok(),
+                env::var("ACTIVITY_DB_PATH").ok(),
+            ) {
+                (Some(app_db_path), Some(activity_db_path)) => DbConfig::Persistent {
+                    app_db_path,
+                    activity_db_path,
+                },
+                _ => DbConfig::Temporary,
             },
             server_address: env::var("SERVER_ADDR").context("SERVER_ADDR not set")?,
             otel_endpoint: env::var("OTEL_ENDPOINT").ok(),
@@ -63,8 +76,10 @@ impl AppConfig {
 }
 
 pub struct AppState {
-    pub db: Arc<AppDb>,
+    pub activity_db: Arc<ActivityDb>,
+    pub app_db: Arc<AppDb>,
     pub event_bus: EventBus,
+    pub activity_bus: ActivityBus,
     pub auth_secret: [u8; 32],
 }
 
@@ -109,7 +124,7 @@ pub async fn handle_event(
         };
 
         let Some(account) = state
-            .db
+            .app_db
             .account_store
             .get_by_id(auth.account_id())
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

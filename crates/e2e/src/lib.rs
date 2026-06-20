@@ -4,6 +4,9 @@ use anyhow::Context;
 use client::ServerEventDispatcher;
 use client::error::ClientResult;
 use common::events::{Auth, ServerEffect, ServerEvent, ServerEventWrapped};
+use server::activities::email::LogEmailProvider;
+use server::activity_bus::ActivityBus;
+use server::db::activity_db::ActivityDb;
 use server::db::app_db::AppDb;
 use server::event_bus::EventBus;
 use server::{AppConfig, AppState, DbConfig};
@@ -27,11 +30,14 @@ impl TestDispatcher {
             tls_key: String::new(),
         };
 
-        let db = Arc::new(AppDb::new(&config)?);
+        let app_db = Arc::new(AppDb::new(&config)?);
+        let activity_db = Arc::new(ActivityDb::new(&config)?);
 
         let state = Arc::new(AppState {
-            event_bus: EventBus::new(db.clone()),
-            db,
+            event_bus: EventBus::new(app_db.clone()),
+            activity_bus: ActivityBus::new(activity_db.clone(), Arc::new(LogEmailProvider)),
+            app_db,
+            activity_db,
             auth_secret: config.auth_secret,
         });
 

@@ -1,4 +1,6 @@
-pub fn validate_email(email: &str) -> Result<(), &'static str> {
+type ValidationError = Result<(), &'static str>;
+
+pub fn validate_email(email: &str) -> ValidationError {
     if email.is_empty() {
         return Err("Email is required");
     }
@@ -21,7 +23,7 @@ pub fn validate_email(email: &str) -> Result<(), &'static str> {
 const MIN_PASSWORD_LENGTH: usize = 8;
 const MAX_PASSWORD_LENGTH: usize = 128;
 
-pub fn validate_password(password: &str) -> Result<(), &'static str> {
+pub fn validate_password(password: &str) -> ValidationError {
     if password.len() < MIN_PASSWORD_LENGTH {
         return Err("Password must be at least 8 characters");
     }

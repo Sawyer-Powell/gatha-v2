@@ -61,7 +61,7 @@ mod tests {
         assert!(
             server_dispatcher
                 .state
-                .db
+                .app_db
                 .account_store
                 .accounts_by_email
                 .contains_key("sawyerhpowell@gmail.com")

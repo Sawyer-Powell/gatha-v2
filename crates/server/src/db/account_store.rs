@@ -164,6 +164,7 @@ impl EventProcessor for AccountStore {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::expect_used)]
+#[allow(clippy::panic)]
 mod test {
     use crate::testing::{dispatch_event, spin_up};
     use chrono::Utc;
@@ -204,7 +205,7 @@ mod test {
 
         // Verify account in DB by id
         let account = state
-            .db
+            .app_db
             .account_store
             .get_by_id(*account_id)
             .unwrap()
@@ -217,7 +218,7 @@ mod test {
 
         // Verify email index points to the account
         let id_from_email = state
-            .db
+            .app_db
             .account_store
             .accounts_by_email
             .get(test_email.as_bytes())
@@ -310,7 +311,7 @@ mod test {
 
         // Verify last_login was updated
         let account = state
-            .db
+            .app_db
             .account_store
             .get_by_id(*account_id)
             .unwrap()

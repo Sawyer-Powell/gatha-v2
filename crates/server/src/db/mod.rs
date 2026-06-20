@@ -1,4 +1,5 @@
 pub mod account_store;
+pub mod activity_db;
 pub mod app_db;
 pub mod event_store;
 

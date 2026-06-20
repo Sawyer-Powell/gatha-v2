@@ -15,7 +15,9 @@ impl AppDb {
     pub fn new(config: &AppConfig) -> AppResult<Self> {
         let db_config = match &config.db {
             DbConfig::Temporary => sled::Config::default().temporary(true),
-            DbConfig::Persistent { path } => sled::Config::default().path(path),
+            DbConfig::Persistent {
+                activity_db_path, ..
+            } => sled::Config::default().path(activity_db_path),
         };
 
         let db = db_config.open()?;
