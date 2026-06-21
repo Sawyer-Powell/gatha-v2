@@ -103,6 +103,10 @@ const pulse = keyframes({
 });
 
 const buttonBase = style({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: spacingScale.sm,
   fontFamily: vars.fonts.prose,
   fontSize: "0.875rem",
   fontWeight: 600,
@@ -206,6 +210,53 @@ export const buttonVariants = styleVariants({
       ...loadingState,
     },
   ],
+});
+
+export const buttonShapeVariants = styleVariants({
+  pill: {
+    borderRadius: radius.pill,
+  },
+  square: {
+    borderRadius: radius.sm,
+    padding: spacingScale.sm,
+  },
+  circle: {
+    width: "2.35rem",
+    height: "2.35rem",
+    padding: 0,
+    borderRadius: radius.pill,
+  },
+});
+
+export const buttonPressedVariants = styleVariants({
+  primary: {
+    boxShadow: "none",
+    transform: "translateY(0)",
+    ":hover": {
+      boxShadow: "none",
+      transform: "translateY(0)",
+    },
+  },
+  secondary: {
+    boxShadow: "none",
+    transform: "translateY(0)",
+    ":hover": {
+      boxShadow: "none",
+      transform: "translateY(0)",
+    },
+  },
+  ghost: {
+    background: vars.colors.card,
+    border: `1px solid ${vars.colors.border}`,
+    boxShadow: "none",
+    transform: "translateY(0)",
+    ":hover": {
+      background: vars.colors.card,
+      border: `1px solid ${vars.colors.border}`,
+      boxShadow: "none",
+      transform: "translateY(0)",
+    },
+  },
 });
 
 // Shared control sizing (inputs, dropdowns, etc.)
@@ -710,6 +761,7 @@ export const videoPlayer = style([
     width: "100%",
     maxWidth: "52rem",
     boxSizing: "border-box",
+    containerType: "inline-size",
     overflow: "visible",
   },
 ]);
@@ -732,8 +784,8 @@ export const videoElement = style({
 
 export const videoChrome = style({
   padding: `${spacingScale.md} ${spacingScale.lg}`,
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       padding: spacingScale.md,
     },
   },
@@ -746,8 +798,8 @@ export const videoChromeStack = style({
   rowGap: spacingScale.md,
   gridTemplateColumns: "minmax(12.5rem, 1fr) auto minmax(12.5rem, 1fr)",
   gridTemplateAreas: '"title title title" "time transport speed"',
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       // On mobile the transport tucks up next to the truncated title, and the
       // time + speed share the row below — far less vertical footprint.
       gridTemplateColumns: "minmax(0, 1fr) 11rem",
@@ -782,8 +834,8 @@ export const videoTimeEdit = style({
   minWidth: 0,
   justifySelf: "start",
   width: "12.5rem",
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       width: "max-content",
     },
   },
@@ -795,8 +847,8 @@ export const videoDuration = style({
   fontSize: textScale.sm,
   whiteSpace: "nowrap",
   flexShrink: 0,
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       display: "none",
     },
   },
@@ -819,8 +871,8 @@ export const videoTimeInput = style({
   ":focus": {
     borderColor: vars.colors.primary,
   },
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       width: "5.5rem",
     },
   },
@@ -832,8 +884,8 @@ export const videoControlCluster = style({
   gridTemplateColumns: `repeat(3, ${controlHeight})`,
   gap: spacingScale.sm,
   justifySelf: "center",
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       justifySelf: "end",
     },
   },
@@ -871,8 +923,8 @@ export const videoSpeedControl = style({
   width: "12.5rem",
   boxSizing: "border-box",
   justifySelf: "end",
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       gridTemplateColumns: "1rem 1fr 1rem",
       width: "100%",
       maxWidth: "11rem",
@@ -897,8 +949,8 @@ export const videoSpeedValue = style({
   fontWeight: 700,
   textAlign: "right",
   whiteSpace: "nowrap",
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       display: "none",
     },
   },
@@ -921,8 +973,8 @@ export const videoShortcut = style({
   whiteSpace: "nowrap",
   pointerEvents: "none",
   transition: `opacity ${vars.transition.fast}`,
-  "@media": {
-    "screen and (max-width: 640px)": {
+  "@container": {
+    "(max-width: 640px)": {
       display: "none",
     },
   },

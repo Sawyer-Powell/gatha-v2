@@ -153,6 +153,12 @@
         <Button variant="secondary">Secondary</Button>
         <Button variant="ghost">Ghost</Button>
     </HStack>
+    <H3>Rounded Square</H3>
+    <HStack gap="md">
+        <Button variant="primary" shape="square">Primary</Button>
+        <Button variant="secondary" shape="square">Secondary</Button>
+        <Button variant="ghost" shape="square">Ghost</Button>
+    </HStack>
     <H3>Loading (click to start, switch to reset)</H3>
     <HStack gap="md">
         <Button variant="primary" loading={primaryLoading} onclick={() => primaryLoading = true}>Primary</Button>

@@ -1,7 +1,7 @@
 <script module lang="ts">
     export interface VideoPlayerProps {
         /** Source URL of the video to play. */
-        src: string;
+        src?: string;
         /** Title shown in the player chrome. */
         title?: string;
         /** Playback position in seconds. Bindable. */
@@ -39,7 +39,7 @@
     } from "./design-system.css";
 
     let {
-        src,
+        src = undefined,
         title = "Video preview",
         currentTime = $bindable(0),
         paused = $bindable(true),
