@@ -16,6 +16,20 @@
         classname?: string;
         /** Optional class applied to the video frame. */
         frameClassname?: string;
+        /** Whether to show the detached playback controls. */
+        controls?: boolean;
+        /** Optional override for the back transport action. */
+        onstepbackward?: () => void;
+        /** Optional override for the forward transport action. */
+        onstepforward?: () => void;
+        /** Disables the back transport action. */
+        stepBackwardDisabled?: boolean;
+        /** Disables the forward transport action. */
+        stepForwardDisabled?: boolean;
+        /** Accessible label for the back transport action. */
+        stepBackwardLabel?: string;
+        /** Accessible label for the forward transport action. */
+        stepForwardLabel?: string;
         /** Enables global keyboard shortcuts for the active workbench view. */
         shortcuts?: boolean;
     }
@@ -24,6 +38,7 @@
 <script lang="ts">
     import { Pause, Play } from "phosphor-svelte";
     import { FastForward, Rabbit, Rewind, Turtle } from "@lucide/svelte";
+    import { formatClockTime, parseClockTime } from "$lib/utils/time";
     import RangeInput, { type RangeDot } from "./RangeInput.svelte";
     import {
         buttonVariants,
@@ -36,10 +51,10 @@
         videoFrame,
         videoPlayer,
         videoScrubber,
-        videoShortcut,
         videoSpeedControl,
         videoSpeedIcon,
         videoSpeedSlider,
+        videoSpeedStepButton,
         videoSpeedValue,
         videoTimeEdit,
         videoTimeInput,
@@ -54,6 +69,13 @@
         duration = $bindable(0),
         classname = "",
         frameClassname = "",
+        controls = true,
+        onstepbackward = undefined,
+        onstepforward = undefined,
+        stepBackwardDisabled = false,
+        stepForwardDisabled = false,
+        stepBackwardLabel = "Rewind 10 seconds",
+        stepForwardLabel = "Forward 10 seconds",
         shortcuts = false,
     }: VideoPlayerProps = $props();
 
@@ -62,6 +84,7 @@
 
     let timeDraft = $state("00:00");
     let editingTime = $state(false);
+    let aspectRatio = $state(16 / 9);
 
     const speedIndex = $derived(Math.max(0, speeds.indexOf(playbackRate)));
     const speedLabel = $derived(`${playbackRate.toFixed(2)}x`);
@@ -80,27 +103,20 @@
             }),
     );
 
-    function formatTime(seconds: number) {
-        const safe = Math.max(0, Math.floor(seconds || 0));
-        const h = Math.floor(safe / 3600);
-        const m = String(Math.floor((safe % 3600) / 60)).padStart(2, "0");
-        const s = String(safe % 60).padStart(2, "0");
-        return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
-    }
-
-    function parseTime(value: string) {
-        const parts = value.trim().split(":").map(Number);
-        if (parts.some(Number.isNaN)) return null;
-        return parts.reduce((total, part) => total * 60 + part, 0);
-    }
-
     function seek(seconds: number) {
         currentTime = Math.max(0, Math.min(seconds, duration || seconds));
     }
 
+    function updateAspectRatio(e: Event) {
+        const video = e.currentTarget as HTMLVideoElement;
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+            aspectRatio = video.videoWidth / video.videoHeight;
+        }
+    }
+
     function commitTimeEdit() {
-        const next = parseTime(timeDraft);
-        if (next === null) timeDraft = formatTime(currentTime);
+        const next = parseClockTime(timeDraft);
+        if (next === null) timeDraft = formatClockTime(currentTime);
         else seek(next);
     }
 
@@ -109,9 +125,21 @@
         playbackRate = speeds[clamped];
     }
 
+    function stepBackward() {
+        if (stepBackwardDisabled) return;
+        if (onstepbackward) onstepbackward();
+        else seek(currentTime - SKIP_SECONDS);
+    }
+
+    function stepForward() {
+        if (stepForwardDisabled) return;
+        if (onstepforward) onstepforward();
+        else seek(currentTime + SKIP_SECONDS);
+    }
+
     $effect(() => {
         if (!editingTime) {
-            timeDraft = formatTime(currentTime);
+            timeDraft = formatClockTime(currentTime);
         }
     });
 
@@ -132,8 +160,8 @@
         }
         const actions: Record<string, () => void> = {
             " ": () => (paused = !paused),
-            ArrowLeft: () => seek(currentTime - SKIP_SECONDS),
-            ArrowRight: () => seek(currentTime + SKIP_SECONDS),
+            ArrowLeft: stepBackward,
+            ArrowRight: stepForward,
         };
         const action = actions[e.key];
         if (action) {
@@ -158,7 +186,11 @@
     }
 </script>
 
-<section class="{videoPlayer} {classname}" aria-label={title}>
+<section
+    class="{videoPlayer} {classname}"
+    aria-label={title}
+    style={`--video-aspect-ratio: ${aspectRatio}`}
+>
     <div class="{videoFrame} {frameClassname}">
         <video
             bind:currentTime
@@ -169,107 +201,127 @@
             {src}
             preload="metadata"
             playsinline
+            onloadedmetadata={updateAspectRatio}
         >
             <track kind="captions" />
         </video>
     </div>
 </section>
 
-<div class={videoChrome} role="group" aria-label={`Playback controls for ${title}`}>
-    <div class={videoChromeStack}>
-        <div class={videoTimeEdit}>
-            <input
-                class={videoTimeInput}
-                value={timeDraft}
-                aria-label="Edit timestamp"
-                onfocus={() => (editingTime = true)}
-                oninput={(e) => (timeDraft = e.currentTarget.value)}
-                onblur={() => {
-                    editingTime = false;
-                    commitTimeEdit();
-                }}
-                onkeydown={(e) => {
-                    if (e.key === "Enter") {
+{#if controls}
+    <div class={videoChrome} role="group" aria-label={`Playback controls for ${title}`}>
+        <div class={videoChromeStack}>
+            <div class={videoTimeEdit}>
+                <input
+                    class={videoTimeInput}
+                    value={timeDraft}
+                    aria-label="Edit timestamp"
+                    onfocus={() => (editingTime = true)}
+                    oninput={(e) => (timeDraft = e.currentTarget.value)}
+                    onblur={() => {
                         editingTime = false;
                         commitTimeEdit();
-                        e.currentTarget.blur();
-                    }
-                    if (e.key === "Escape") {
-                        editingTime = false;
-                        timeDraft = formatTime(currentTime);
-                        e.currentTarget.blur();
-                    }
-                }}
-            />
-            <span class={videoDuration}>/ {formatTime(duration)}</span>
-        </div>
+                    }}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") {
+                            editingTime = false;
+                            commitTimeEdit();
+                            e.currentTarget.blur();
+                        }
+                        if (e.key === "Escape") {
+                            editingTime = false;
+                            timeDraft = formatClockTime(currentTime);
+                            e.currentTarget.blur();
+                        }
+                    }}
+                />
+                <span class={videoDuration}>/ {formatClockTime(duration)}</span>
+            </div>
 
-        <RangeInput
-            classname={videoScrubber}
-            min={0}
-            max={duration || 0}
-            step="0.01"
-            value={currentTime}
-            ariaLabel="Scrub video timeline"
-            disabled={duration === 0}
-            oninput={seek}
-        />
-
-        <div class={videoControlCluster}>
-            <button
-                class="{buttonVariants.secondary} {videoControlButton}"
-                type="button"
-                title="Rewind 10s (←)"
-                aria-label="Rewind 10 seconds"
-                onclick={() => seek(currentTime - SKIP_SECONDS)}
-            >
-                <Rewind size={16} />
-                <span class={videoShortcut} aria-hidden="true">←</span>
-            </button>
-
-            <button
-                class="{buttonVariants.primary} {videoControlButton}"
-                type="button"
-                title="Play or pause (Space)"
-                aria-label={paused ? "Play video" : "Pause video"}
-                onclick={() => (paused = !paused)}
-            >
-                {#if paused}
-                    <Play size={16} weight="bold" />
-                {:else}
-                    <Pause size={16} weight="bold" />
-                {/if}
-                <span class={videoShortcut} aria-hidden="true">Space</span>
-            </button>
-
-            <button
-                class="{buttonVariants.secondary} {videoControlButton}"
-                type="button"
-                title="Forward 10s (→)"
-                aria-label="Forward 10 seconds"
-                onclick={() => seek(currentTime + SKIP_SECONDS)}
-            >
-                <FastForward size={16} />
-                <span class={videoShortcut} aria-hidden="true">→</span>
-            </button>
-        </div>
-
-        <div class={videoSpeedControl}>
-            <Turtle class={videoSpeedIcon} size={16} aria-hidden="true" />
             <RangeInput
-                classname={videoSpeedSlider}
+                classname={videoScrubber}
                 min={0}
-                max={speeds.length - 1}
-                step={1}
-                value={speedIndex}
-                dots={speedDots}
-                ariaLabel={`Playback speed: ${speedLabel}`}
-                title={`Playback speed: ${speedLabel}`}
-                oninput={setSpeed}
-                onkeydown={handleSpeedKeydown}
+                max={duration || 0}
+                step="0.01"
+                value={currentTime}
+                ariaLabel="Scrub video timeline"
+                disabled={duration === 0}
+                oninput={seek}
             />
-            <Rabbit class={videoSpeedIcon} size={16} aria-hidden="true" />
-            <span class={videoSpeedValue}>{speedLabel}</span>
+
+            <div class={videoControlCluster}>
+                <button
+                    class="{buttonVariants.secondary} {videoControlButton}"
+                    type="button"
+                    title={`${stepBackwardLabel} (←)`}
+                    aria-label={stepBackwardLabel}
+                    disabled={stepBackwardDisabled}
+                    onclick={stepBackward}
+                >
+                    <Rewind size={16} />
+                </button>
+
+                <button
+                    class="{buttonVariants.primary} {videoControlButton}"
+                    type="button"
+                    title="Play or pause (Space)"
+                    aria-label={paused ? "Play video" : "Pause video"}
+                    onclick={() => (paused = !paused)}
+                >
+                    {#if paused}
+                        <Play size={16} weight="bold" />
+                    {:else}
+                        <Pause size={16} weight="bold" />
+                    {/if}
+                </button>
+
+                <button
+                    class="{buttonVariants.secondary} {videoControlButton}"
+                    type="button"
+                    title={`${stepForwardLabel} (→)`}
+                    aria-label={stepForwardLabel}
+                    disabled={stepForwardDisabled}
+                    onclick={stepForward}
+                >
+                    <FastForward size={16} />
+                </button>
+            </div>
+
+            <div class={videoSpeedControl}>
+                <button
+                    class={videoSpeedStepButton}
+                    type="button"
+                    title="Decrease playback speed"
+                    aria-label="Decrease playback speed"
+                    disabled={speedIndex <= 0}
+                    onclick={() => setSpeed(speedIndex - 1)}
+                >
+                    <Turtle class={videoSpeedIcon} size={16} aria-hidden="true" />
+                </button>
+                <RangeInput
+                    classname={videoSpeedSlider}
+                    min={0}
+                    max={speeds.length - 1}
+                    step={1}
+                    value={speedIndex}
+                    dots={speedDots}
+                    ariaLabel={`Playback speed: ${speedLabel}`}
+                    title={`Playback speed: ${speedLabel}`}
+                    oninput={setSpeed}
+                    onkeydown={handleSpeedKeydown}
+                />
+                <button
+                    class={videoSpeedStepButton}
+                    type="button"
+                    title="Increase playback speed"
+                    aria-label="Increase playback speed"
+                    disabled={speedIndex >= speeds.length - 1}
+                    onclick={() => setSpeed(speedIndex + 1)}
+                >
+                    <Rabbit class={videoSpeedIcon} size={16} aria-hidden="true" />
+                </button>
+                <span class={videoSpeedValue}>{speedLabel}</span>
+            </div>
         </div>
     </div>
-</div>
+{/if}

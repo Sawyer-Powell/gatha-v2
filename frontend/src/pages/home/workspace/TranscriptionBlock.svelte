@@ -7,7 +7,9 @@
         currentTime: number;
         mediaDuration?: number;
         active?: boolean;
+        optionMode?: boolean;
         onseek?: (time: number) => void;
+        onselect?: () => void;
     }
 </script>
 
@@ -18,6 +20,7 @@
         selectableSurfaceActive,
     } from "$lib/design-system/design-system.css";
     import RangeInput from "$lib/design-system/RangeInput.svelte";
+    import { formatClockTime } from "$lib/utils/time";
     import {
         transcription_block,
         transcription_index,
@@ -27,7 +30,7 @@
         transcription_text,
         transcription_textarea,
         transcription_time,
-    } from "./page.css";
+    } from "./workspace.css";
 
     let {
         index,
@@ -37,7 +40,9 @@
         currentTime,
         mediaDuration = 0,
         active = false,
+        optionMode = false,
         onseek,
+        onselect,
     }: TranscriptionBlockProps = $props();
 
     let blockEl = $state<HTMLElement>();
@@ -59,16 +64,17 @@
         `${ghostClass} ${selectableSurfaceActive}`,
     );
 
-    function formatTime(seconds: number) {
-        const safe = Math.max(0, Math.floor(seconds));
-        return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
-    }
-
     $effect(() => {
         if (active) {
             renderScrubber = true;
             scrubberExiting = false;
-            tick().then(() => blockEl?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+            tick().then(() => {
+                const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                blockEl?.scrollIntoView({
+                    block: "nearest",
+                    behavior: prefersReducedMotion ? "auto" : "smooth",
+                });
+            });
         } else if (renderScrubber) {
             scrubberExiting = true;
         }
@@ -88,6 +94,10 @@
     });
 
     function selectBlock() {
+        if (optionMode) {
+            onselect?.();
+            return;
+        }
         if (!active) onseek?.(start);
     }
 
@@ -109,7 +119,7 @@
     <div class={transcription_index}>#{index}</div>
     <div>
         <div class={transcription_meta}>
-            <span class={transcription_time}>{formatTime(start)} - {formatTime(end)}</span>
+            <span class={transcription_time}>{formatClockTime(start)} - {formatClockTime(end)}</span>
         </div>
         {#if active}
             <textarea
@@ -124,7 +134,16 @@
     </div>
 {/snippet}
 
-{#if active || renderScrubber}
+{#if optionMode && !active}
+    <button
+        bind:this={blockEl}
+        class={ghostClass}
+        type="button"
+        onclick={selectBlock}
+    >
+        {@render blockContent()}
+    </button>
+{:else if active || renderScrubber}
     <article
         bind:this={blockEl}
         class={active ? activeClass : ghostClass}

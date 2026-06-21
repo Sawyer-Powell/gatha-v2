@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+visual-regression/*.current.png
+visual-regression/*.diff.png
 
 # Editor directories and files
 .vscode/*

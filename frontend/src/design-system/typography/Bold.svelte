@@ -1,7 +1,10 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { bold } from "../design-system.css";
-    let { children }: { children: Snippet } = $props();
+    let { classname = "", children }: {
+        classname?: string;
+        children: Snippet;
+    } = $props();
 </script>
 
-<strong class={bold}>{@render children()}</strong>
+<strong class="{bold} {classname}">{@render children()}</strong>

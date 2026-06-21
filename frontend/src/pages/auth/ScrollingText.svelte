@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { scrollingText, scrollingTextRow } from "./auth.css";
 
     const charSet =
         "abcdefghijklmnopqrstuvwxyz0123456789 .,:;!?-—()[]{}\"'/@#$%&*";
@@ -118,44 +119,8 @@
     });
 </script>
 
-<div class="scrolling-text" bind:this={containerEl}>
+<div class={scrollingText} bind:this={containerEl}>
     {#each rows as row}
-        <div class="row" bind:this={row.el}></div>
+        <div class={scrollingTextRow} bind:this={row.el}></div>
     {/each}
 </div>
-
-<style>
-    .scrolling-text {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        pointer-events: none;
-        mask-image: linear-gradient(
-            135deg,
-            transparent 0%,
-            rgba(0, 0, 0, 0.4) 30%,
-            rgba(0, 0, 0, 0.4) 70%,
-            transparent 100%
-        );
-        -webkit-mask-image: linear-gradient(
-            135deg,
-            transparent 0%,
-            rgba(0, 0, 0, 0.4) 30%,
-            rgba(0, 0, 0, 0.4) 70%,
-            transparent 100%
-        );
-    }
-
-    .row {
-        white-space: nowrap;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 1.5rem;
-        line-height: 1.6;
-        color: var(--colors-muted, #928374);
-        opacity: 0.15;
-        letter-spacing: 0.05em;
-        will-change: transform;
-    }
-</style>

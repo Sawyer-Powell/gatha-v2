@@ -1,6 +1,6 @@
 <script lang="ts">
     import SignIn from "$lib/pages/auth/SignIn.svelte";
-    import Page from "$lib/pages/Page.svelte";
+    import Home from "$lib/pages/home/Home.svelte";
     import { getStore } from "$lib/store.svelte";
 
     const store = $derived(getStore());
@@ -8,7 +8,7 @@
 </script>
 
 {#if page === "Home"}
-    <Page />
+    <Home />
 {:else if typeof page === "object" && "SignIn" in page}
     <SignIn />
 {:else if typeof page === "object" && "PasswordReset" in page}

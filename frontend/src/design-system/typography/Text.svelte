@@ -1,10 +1,11 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { text, textSize } from "../design-system.css";
-    let { size = "md", children }: {
+    let { size = "md", classname = "", children }: {
         size?: "xs" | "sm" | "md" | "lg";
+        classname?: string;
         children: Snippet;
     } = $props();
 </script>
 
-<span class="{text} {textSize[size]}">{@render children()}</span>
+<span class="{text} {textSize[size]} {classname}">{@render children()}</span>

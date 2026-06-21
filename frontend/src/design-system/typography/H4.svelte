@@ -1,7 +1,10 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { h4 } from "./headings.css";
-    let { children }: { children: Snippet } = $props();
+    let { classname = "", children }: {
+        classname?: string;
+        children: Snippet;
+    } = $props();
 </script>
 
-<h4 class={h4}>{@render children()}</h4>
+<h4 class="{h4} {classname}">{@render children()}</h4>

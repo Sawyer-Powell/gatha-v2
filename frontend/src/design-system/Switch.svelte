@@ -1,14 +1,15 @@
 <script lang="ts">
     import { switchButton, switchThumb } from "./design-system.css";
-    let { checked = false, label = "Toggle", onchange }: {
+    let { checked = false, label = "Toggle", classname = "", onchange }: {
         checked?: boolean;
         label?: string;
+        classname?: string;
         onchange?: (checked: boolean) => void;
     } = $props();
 </script>
 
 <button
-    class={switchButton}
+    class="{switchButton} {classname}"
     role="switch"
     aria-checked={checked}
     aria-label={label}

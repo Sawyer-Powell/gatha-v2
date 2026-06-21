@@ -23,12 +23,14 @@
         value = null,
         placeholder = "Select...",
         size = "md",
+        classname = "",
         onchange,
     }: {
         options?: string[];
         value?: string | null;
         placeholder?: string;
         size?: "sm" | "md" | "lg";
+        classname?: string;
         onchange?: (value: string) => void;
     } = $props();
 
@@ -139,7 +141,7 @@
     });
 </script>
 
-<div class={dropdownWrapper} bind:this={wrapperEl}>
+<div class="{dropdownWrapper} {classname}" bind:this={wrapperEl}>
     <button
         class="{dropdownTrigger} {dropdownTriggerSize[size]} {open
             ? dropdownTriggerOpen

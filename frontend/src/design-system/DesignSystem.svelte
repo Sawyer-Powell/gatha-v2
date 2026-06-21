@@ -16,11 +16,15 @@
     import Card from "$lib/design-system/Card.svelte";
     import Logo from "$lib/design-system/Logo.svelte";
     import Modal from "$lib/design-system/Modal.svelte";
+    import ProfilePicture from "$lib/design-system/ProfilePicture.svelte";
+    import ProgressBar from "$lib/design-system/ProgressBar.svelte";
+    import ProgressDial from "$lib/design-system/ProgressDial.svelte";
     import RangeInput from "$lib/design-system/RangeInput.svelte";
     import Dropdown from "$lib/design-system/Dropdown.svelte";
+    import DropdownMenu from "$lib/design-system/DropdownMenu.svelte";
     import Combobox from "$lib/design-system/Combobox.svelte";
     import VideoPlayer from "$lib/design-system/VideoPlayer.svelte";
-    import { MagnifyingGlass } from "phosphor-svelte";
+    import { MagnifyingGlass, ShareFat, TrashSimple } from "phosphor-svelte";
 
     let switchOn = $state(false);
     let sliderValue = $state(0.5);
@@ -31,6 +35,7 @@
     let modalOpen = $state(false);
     let dropdownValue = $state<string | null>(null);
     let comboboxValues = $state<string[]>([]);
+    const sampleAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23458588'/%3E%3Ccircle cx='40' cy='22' r='18' fill='%23d79921'/%3E%3Cpath d='M6 58c8-18 22-28 42-30 4 8 5 18 2 30z' fill='%2383a598'/%3E%3C/svg%3E";
 </script>
 
 <VStack gap="lg">
@@ -94,34 +99,51 @@
 
     <Spacer size="lg" />
 
+    <H2>Profile Picture</H2>
+    <HStack gap="md">
+        <ProfilePicture name="Sawyer Powell" />
+        <ProfilePicture
+            name="Jiayin Liu"
+            imageUrl={sampleAvatar}
+        />
+        <ProfilePicture name="US Zen Admin" size="lg" />
+    </HStack>
+
+    <Spacer size="lg" />
+
     <H2>Inputs</H2>
     <VStack gap="sm">
         <Input
             size="sm"
             placeholder="Small input"
+            ariaLabel="Small input"
             value={inputValue}
             oninput={(v) => (inputValue = v)}
         />
         <Input
             size="md"
             placeholder="Medium input"
+            ariaLabel="Medium input"
             value={inputValue}
             oninput={(v) => (inputValue = v)}
         />
         <Input
             size="lg"
             placeholder="Large input"
+            ariaLabel="Large input"
             value={inputValue}
             oninput={(v) => (inputValue = v)}
         />
         <Input
             placeholder="With icon"
+            ariaLabel="Input with search icon"
             icon={MagnifyingGlass}
             value={inputValue}
             oninput={(v) => (inputValue = v)}
         />
         <Input
             placeholder="Clearable"
+            ariaLabel="Clearable input"
             clearable
             value={inputValue}
             oninput={(v) => (inputValue = v)}
@@ -129,6 +151,7 @@
         <Input
             size="lg"
             placeholder="Icon + clearable"
+            ariaLabel="Large clearable search input"
             icon={MagnifyingGlass}
             clearable
             value={inputValue}
@@ -144,6 +167,10 @@
         oninput={(v) => sliderValue = v}
     />
     <p>{sliderValue.toFixed(2)}</p>
+
+    <H3>Progress</H3>
+    <ProgressBar value={sliderValue} ariaLabel="Design system progress bar" />
+    <ProgressDial value={sliderValue} ariaLabel="Design system progress dial" />
 
     <Spacer size="lg" />
 
@@ -185,6 +212,15 @@
     />
     <p>Selected: {dropdownValue ?? "none"}</p>
 
+    <H3>Dropdown Menu</H3>
+    <DropdownMenu
+        ariaLabel="Open actions"
+        items={[
+            { label: "Share", icon: ShareFat },
+            { label: "Delete", icon: TrashSimple },
+        ]}
+    />
+
     <H3>Combobox</H3>
     <Combobox
         options={["Apple", "Banana", "Cherry", "Date", "Elderberry", "Fig", "Grape", "Honeydew"]}
@@ -198,7 +234,7 @@
 
     <H2>Modal</H2>
     <Button onclick={() => (modalOpen = !modalOpen)}>Toggle Modal</Button>
-    <Modal open={modalOpen}>
+    <Modal open={modalOpen} ariaLabel="Design system modal">
         <VStack gap="md">
             <H3>Modal Title</H3>
             <p>This is modal content with a backdrop blur.</p>

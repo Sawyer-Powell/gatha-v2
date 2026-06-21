@@ -2,20 +2,35 @@ import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "../app.css";
 
 // Base tokens
-const radius = {
+export const radius = {
   sm: "1rem",
   md: "1.25rem",
   lg: "1.5rem",
   pill: "9999px",
 };
 
-const spacingScale = {
+export const spacingScale = {
   xs: "0.25rem",
   sm: "0.5rem",
   md: "1rem",
   lg: "1.5rem",
   xl: "2.25rem",
 };
+
+export const breakpoint = {
+  mobile: "48rem",
+  workbench: "44rem",
+} as const;
+
+export const control = {
+  height: "2.35rem",
+} as const;
+
+export const layer = {
+  page: 0,
+  popover: 30,
+  modal: 100,
+} as const;
 
 // Layout
 export const hstack = style({
@@ -108,7 +123,7 @@ const buttonBase = style({
   justifyContent: "center",
   gap: spacingScale.sm,
   fontFamily: vars.fonts.prose,
-  fontSize: "0.875rem",
+  fontSize: textScale.sm,
   fontWeight: 600,
   padding: `${spacingScale.sm} ${spacingScale.md}`,
   borderRadius: radius.pill,
@@ -122,6 +137,13 @@ const buttonBase = style({
     transform: "translateY(-1px)",
   },
   ":active": {
+    transform: "translateY(0)",
+    boxShadow: "none",
+  },
+  ":disabled": {
+    cursor: "default",
+    opacity: 0.62,
+    pointerEvents: "none",
     transform: "translateY(0)",
     boxShadow: "none",
   },
@@ -140,9 +162,9 @@ export const buttonVariants = styleVariants({
     {
       background: vars.colors.primary,
       color: vars.colors.background,
-      boxShadow: `0 3px 0 0 #af4b0b`,
+      boxShadow: `0 3px 0 0 ${vars.colors.primaryShadow}`,
       ":hover": {
-        boxShadow: `0 2px 0 0 #af4b0b`,
+        boxShadow: `0 2px 0 0 ${vars.colors.primaryShadow}`,
         transform: "translateY(-1px)",
       },
       ":active": { boxShadow: "none", transform: "translateY(0)" },
@@ -221,8 +243,8 @@ export const buttonShapeVariants = styleVariants({
     padding: spacingScale.sm,
   },
   circle: {
-    width: "2.35rem",
-    height: "2.35rem",
+    width: control.height,
+    height: control.height,
     padding: 0,
     borderRadius: radius.pill,
   },
@@ -259,6 +281,88 @@ export const buttonPressedVariants = styleVariants({
   },
 });
 
+export const profilePicture = style({
+  display: "inline-grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+  aspectRatio: "1",
+  borderRadius: radius.pill,
+  overflow: "hidden",
+  background: vars.colors.accent,
+  color: vars.colors.background,
+  fontFamily: vars.fonts.heading,
+  fontWeight: 700,
+  lineHeight: 1,
+});
+
+export const profilePictureSizeVariants = styleVariants({
+  xs: {
+    width: "1.35rem",
+    fontSize: "0.625rem",
+  },
+  sm: {
+    width: "1.75rem",
+    fontSize: textScale.xs,
+  },
+  md: {
+    width: "2.25rem",
+    fontSize: textScale.xs,
+  },
+  lg: {
+    width: "3rem",
+    fontSize: textScale.sm,
+  },
+});
+
+export const profilePictureImage = style({
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+});
+
+export const hiddenFileInput = style({
+  display: "none",
+});
+
+export const fileUploadButton = style({
+  position: "relative",
+  overflow: "hidden",
+});
+
+export const fileUploadContent = style({
+  display: "inline-grid",
+  placeItems: "center",
+  width: "100%",
+  height: "100%",
+  transition: `opacity ${vars.transition.normal}`,
+  selectors: {
+    [`${fileUploadButton}:hover &`]: {
+      opacity: 0,
+    },
+    [`${fileUploadButton}:focus-visible &`]: {
+      opacity: 0,
+    },
+  },
+});
+
+export const fileUploadIcon = style({
+  position: "absolute",
+  inset: 0,
+  display: "grid",
+  placeItems: "center",
+  color: vars.colors.foreground,
+  opacity: 0,
+  transition: `opacity ${vars.transition.normal}`,
+  selectors: {
+    [`${fileUploadButton}:hover &`]: {
+      opacity: 1,
+    },
+    [`${fileUploadButton}:focus-visible &`]: {
+      opacity: 1,
+    },
+  },
+});
+
 export const selectableSurface = style([
   buttonVariants.ghost,
   buttonShapeVariants.square,
@@ -282,10 +386,10 @@ export const selectableSurfaceActive = style([
 
 // Shared control sizing (inputs, dropdowns, etc.)
 const controlSize = {
-  sm: { padding: `0.25rem 0.625rem`, fontSize: "0.75rem" },
+  sm: { padding: `0.25rem 0.625rem`, fontSize: textScale.xs },
   md: {
     padding: `${spacingScale.sm} ${spacingScale.md}`,
-    fontSize: "0.875rem",
+    fontSize: textScale.sm,
   },
   lg: { padding: `0.625rem 1.25rem`, fontSize: "1rem" },
 };
@@ -371,7 +475,7 @@ export const switchThumb = style({
   width: "1.125rem",
   height: "1.125rem",
   borderRadius: "50%",
-  background: "white",
+  background: vars.colors.switchThumb,
   position: "absolute",
   top: "0.1875rem",
   left: "0.1875rem",
@@ -388,7 +492,7 @@ const cardBase = style({
   background: vars.colors.card,
   border: `1px solid ${vars.colors.border}`,
   borderRadius: radius.lg,
-  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
+  boxShadow: vars.shadows.card,
 });
 
 export const cardPadding = styleVariants({
@@ -402,7 +506,8 @@ export const cardPadding = styleVariants({
 export const modalBackdrop = style({
   position: "fixed",
   inset: 0,
-  background: "rgba(0, 0, 0, 0.4)",
+  zIndex: layer.modal,
+  background: vars.colors.backdrop,
   backdropFilter: "blur(4px)",
   display: "flex",
   alignItems: "center",
@@ -422,7 +527,7 @@ export const modalContent = style({
   background: vars.colors.card,
   borderRadius: radius.lg,
   padding: spacingScale.lg,
-  boxShadow: "0 1rem 3rem rgba(0, 0, 0, 0.2)",
+  boxShadow: vars.shadows.modal,
   transform: "scale(0.95) translateY(0.5rem)",
   transition: `transform ${vars.transition.slow}, opacity ${vars.transition.slow}`,
   opacity: 0,
@@ -438,9 +543,14 @@ export const modalContent = style({
 export const popoverWrapper = style({
   position: "relative",
   width: "fit-content",
+  selectors: {
+    '&[data-open="true"]': {
+      zIndex: layer.popover,
+    },
+  },
 });
 
-export const popoverTrigger = style({
+const popoverTrigger = style({
   display: "flex",
   alignItems: "center",
   gap: spacingScale.sm,
@@ -456,9 +566,9 @@ export const popoverTrigger = style({
   },
 });
 
-export const popoverTriggerSize = styleVariants(controlSize);
+const popoverTriggerSize = styleVariants(controlSize);
 
-export const popoverTriggerOpen = style({
+const popoverTriggerOpen = style({
   borderColor: vars.colors.primary,
 });
 
@@ -474,7 +584,7 @@ export const popoverChevron = style({
   marginLeft: "auto",
 });
 
-export const popoverChevronOpen = style({
+const popoverChevronOpen = style({
   transform: "rotate(180deg)",
 });
 
@@ -483,12 +593,12 @@ export const popoverMenu = style({
   left: 0,
   minWidth: "100%",
   width: "max-content",
-  zIndex: 100,
+  zIndex: layer.popover,
   background: vars.colors.card,
   border: `1px solid ${vars.colors.border}`,
   borderRadius: radius.md,
   padding: `${spacingScale.xs} 0`,
-  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
+  boxShadow: vars.shadows.popover,
   opacity: 0,
   transform: "scaleY(0.95)",
   transformOrigin: "top",
@@ -506,6 +616,11 @@ export const popoverMenuUp = style({
   transformOrigin: "bottom",
 });
 
+export const popoverMenuAlignEnd = style({
+  left: "auto",
+  right: 0,
+});
+
 export const popoverItem = style({
   display: "flex",
   alignItems: "center",
@@ -514,7 +629,7 @@ export const popoverItem = style({
   margin: `0 ${spacingScale.xs}`,
   borderRadius: radius.pill,
   fontFamily: vars.fonts.prose,
-  fontSize: "0.875rem",
+  fontSize: textScale.sm,
   color: vars.colors.foreground,
   cursor: "pointer",
   transition: `background ${vars.transition.fast}`,
@@ -540,6 +655,16 @@ export const popoverCheck = style({
   flexShrink: 0,
 });
 
+export const popoverActionItem = style([
+  popoverItem,
+  {
+    width: "calc(100% - 0.5rem)",
+    border: "none",
+    background: "transparent",
+    textAlign: "left",
+  },
+]);
+
 // Dropdown aliases (use shared popover)
 export const dropdownWrapper = popoverWrapper;
 export const dropdownTrigger = popoverTrigger;
@@ -551,9 +676,11 @@ export const dropdownChevronOpen = popoverChevronOpen;
 export const dropdownMenu = popoverMenu;
 export const dropdownMenuOpen = popoverMenuOpen;
 export const dropdownMenuUp = popoverMenuUp;
+export const dropdownMenuAlignEnd = popoverMenuAlignEnd;
 export const dropdownItem = popoverItem;
 export const dropdownItemSelected = popoverItemSelected;
 export const dropdownCheck = popoverCheck;
+export const dropdownActionItem = popoverActionItem;
 
 // Combobox-specific styles
 export const comboboxTrigger = style({
@@ -576,6 +703,10 @@ export const comboboxTrigger = style({
   },
 });
 
+export const comboboxTriggerOpen = style({
+  borderColor: vars.colors.primary,
+});
+
 export const comboboxTriggerWithTags = style({
   padding: `0.25rem 0.5rem 0.25rem 0.25rem`,
   transition: `border-color ${vars.transition.normal}`,
@@ -584,18 +715,12 @@ export const comboboxTriggerWithTags = style({
   },
 });
 
-export const comboboxInput = style({
-  fontFamily: vars.fonts.prose,
-  fontSize: "inherit",
-  background: "transparent",
-  color: vars.colors.foreground,
-  border: "none",
-  outline: "none",
-  flex: 1,
-  minWidth: "4rem",
-  "::placeholder": {
-    color: vars.colors.muted,
-  },
+export const comboboxIconTrigger = style({
+  width: control.height,
+  height: control.height,
+  padding: 0,
+  justifyContent: "center",
+  flexShrink: 0,
 });
 
 export const comboboxTag = style({
@@ -641,7 +766,7 @@ export const comboboxSearchInput = style({
   border: `1px solid ${vars.colors.border}`,
   background: vars.colors.background,
   fontFamily: vars.fonts.prose,
-  fontSize: "0.875rem",
+  fontSize: textScale.sm,
   color: vars.colors.foreground,
   outline: "none",
   boxSizing: "border-box",
@@ -653,6 +778,21 @@ export const comboboxSearchInput = style({
     color: vars.colors.muted,
   },
 });
+
+export const comboboxOptionContent = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  minWidth: 0,
+});
+
+export const comboboxEmptyState = style([
+  popoverItem,
+  {
+    pointerEvents: "none",
+    color: vars.colors.muted,
+  },
+]);
 
 // Video player
 const controlHeight = "2.1875rem";
@@ -671,7 +811,7 @@ const rangeThumb = {
   borderRadius: "50%",
   border: `2px solid ${vars.colors.background}`,
   background: vars.colors.primary,
-  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
+  boxShadow: vars.shadows.rangeThumb,
 } as const;
 
 const rangeFillWidth = "var(--range-fill-width, 0px)";
@@ -748,6 +888,54 @@ export const timelineScrubber = style({
   },
 });
 
+export const progressBar = style({
+  vars: {
+    "--progress-ratio": "0",
+  },
+  position: "relative",
+  display: "block",
+  width: "100%",
+  height: rangeTrackSize,
+  borderRadius: radius.pill,
+  overflow: "hidden",
+  background: vars.colors.border,
+  selectors: {
+    "&::after": {
+      content: "",
+      position: "absolute",
+      inset: 0,
+      width: "calc(var(--progress-ratio) * 100%)",
+      borderRadius: "inherit",
+      background: vars.colors.primary,
+      transition: `width ${vars.transition.normal}`,
+    },
+  },
+});
+
+export const progressDial = style({
+  vars: {
+    "--progress-ratio": "0",
+    "--progress-degrees": "0deg",
+  },
+  display: "inline-grid",
+  placeItems: "center",
+  width: "1rem",
+  height: "1rem",
+  flex: "0 0 auto",
+  borderRadius: "50%",
+  background: `conic-gradient(${vars.colors.primary} var(--progress-degrees), ${vars.colors.border} 0)`,
+  boxShadow: `inset 0 0 0 1px ${vars.colors.border}`,
+  selectors: {
+    "&::after": {
+      content: "",
+      width: "0.5rem",
+      height: "0.5rem",
+      borderRadius: "50%",
+      background: vars.colors.card,
+    },
+  },
+});
+
 export const videoPlayer = style([
   cardBase,
   {
@@ -761,7 +949,7 @@ export const videoPlayer = style([
 
 export const videoFrame = style({
   background: vars.colors.foreground,
-  aspectRatio: "16 / 9",
+  aspectRatio: "var(--video-aspect-ratio, 16 / 9)",
   width: "100%",
   overflow: "hidden",
   borderRadius: `calc(${radius.lg} - 1px)`,
@@ -779,25 +967,25 @@ export const videoChrome = style({
   left: "50%",
   bottom: spacingScale.md,
   transform: "translateX(-50%)",
-  zIndex: 30,
+  zIndex: layer.popover,
   width: "min(calc(100vw - 2rem), 54rem)",
   boxSizing: "border-box",
   padding: `0.625rem ${spacingScale.md}`,
   border: `1px solid ${vars.colors.border}`,
   borderRadius: radius.pill,
-  background: "rgba(249, 245, 215, 0.94)",
-  boxShadow: "0 1rem 2.5rem rgba(60, 56, 54, 0.18)",
+  background: vars.colors.chromeTint,
+  boxShadow: vars.shadows.chrome,
   backdropFilter: "blur(16px)",
   containerType: "inline-size",
   "@media": {
-    "(max-width: 48rem)": {
+    [`(max-width: ${breakpoint.mobile})`]: {
       bottom: "0.625rem",
       width: "calc(100vw - 1.25rem)",
       padding: `0.5rem ${spacingScale.sm}`,
     },
   },
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       borderRadius: radius.lg,
     },
   },
@@ -811,7 +999,7 @@ export const videoChromeStack = style({
   gridTemplateColumns: "auto minmax(8rem, 1fr) auto minmax(10rem, 12.5rem)",
   gridTemplateAreas: '"time scrubber transport speed"',
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       gridTemplateColumns: "auto 1fr auto",
       gridTemplateAreas: '"time scrubber transport" "speed speed speed"',
       rowGap: spacingScale.sm,
@@ -827,17 +1015,6 @@ export const videoScrubber = style({
   gridArea: "scrubber",
 });
 
-export const videoTitle = style({
-  gridArea: "title",
-  minWidth: 0,
-  fontFamily: vars.fonts.heading,
-  fontSize: textScale.md,
-  fontWeight: 800,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-});
-
 export const videoTimeEdit = style({
   gridArea: "time",
   display: "flex",
@@ -847,7 +1024,7 @@ export const videoTimeEdit = style({
   justifySelf: "start",
   width: "max-content",
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       width: "max-content",
     },
   },
@@ -860,7 +1037,7 @@ export const videoDuration = style({
   whiteSpace: "nowrap",
   flexShrink: 0,
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       display: "none",
     },
   },
@@ -884,7 +1061,7 @@ export const videoTimeInput = style({
     borderColor: vars.colors.primary,
   },
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       width: "5.5rem",
     },
   },
@@ -897,7 +1074,7 @@ export const videoControlCluster = style({
   gap: spacingScale.sm,
   justifySelf: "center",
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       justifySelf: "end",
     },
   },
@@ -919,6 +1096,12 @@ export const videoControlButton = style({
   ":active": {
     transform: "none",
   },
+  ":disabled": {
+    opacity: 0.38,
+    cursor: "default",
+    boxShadow: "none",
+    transform: "none",
+  },
 });
 
 export const videoSpeedControl = style({
@@ -936,7 +1119,7 @@ export const videoSpeedControl = style({
   boxSizing: "border-box",
   justifySelf: "end",
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       gridTemplateColumns: "1rem 1fr 1rem",
       width: "100%",
       maxWidth: "none",
@@ -945,8 +1128,34 @@ export const videoSpeedControl = style({
   },
 });
 
-export const videoSpeedIcon = style({
+export const videoSpeedStepButton = style({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "1rem",
+  height: "1rem",
+  padding: 0,
+  border: "none",
+  borderRadius: radius.pill,
+  background: "transparent",
   color: vars.colors.muted,
+  cursor: "pointer",
+  transition: `color ${vars.transition.fast}, transform ${vars.transition.fast}`,
+  ":hover": {
+    color: vars.colors.foreground,
+    transform: "translateY(-1px)",
+  },
+  ":active": {
+    transform: "translateY(0)",
+  },
+  ":disabled": {
+    opacity: 0.38,
+    cursor: "default",
+    transform: "none",
+  },
+});
+
+export const videoSpeedIcon = style({
   flexShrink: 0,
 });
 
@@ -960,40 +1169,8 @@ export const videoSpeedValue = style({
   textAlign: "right",
   whiteSpace: "nowrap",
   "@container": {
-    "(max-width: 44rem)": {
+    [`(max-width: ${breakpoint.workbench})`]: {
       display: "none",
-    },
-  },
-});
-
-export const videoShortcut = style({
-  position: "absolute",
-  left: "50%",
-  bottom: "calc(100% + 0.375rem)",
-  transform: "translateX(-50%)",
-  zIndex: 2,
-  padding: `0.1875rem ${spacingScale.sm}`,
-  borderRadius: radius.pill,
-  background: vars.colors.foreground,
-  color: vars.colors.background,
-  fontFamily: vars.fonts.prose,
-  fontSize: "0.6875rem",
-  fontWeight: 700,
-  opacity: 0,
-  whiteSpace: "nowrap",
-  pointerEvents: "none",
-  transition: `opacity ${vars.transition.fast}`,
-  "@container": {
-    "(max-width: 44rem)": {
-      display: "none",
-    },
-  },
-  selectors: {
-    [`${videoControlButton}:hover &`]: {
-      opacity: 1,
-    },
-    [`${videoControlButton}:focus-visible &`]: {
-      opacity: 1,
     },
   },
 });

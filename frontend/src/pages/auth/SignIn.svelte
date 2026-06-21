@@ -10,6 +10,7 @@
     import ScrollingText from "$lib/pages/auth/ScrollingText.svelte";
     import { EnvelopeIcon, LockIcon } from "phosphor-svelte";
     import { dispatch, getStore } from "$lib/store.svelte";
+    import { signInContent, signInError, signInPage } from "./auth.css";
 
     const store = $derived(getStore());
     const page = $derived(
@@ -27,6 +28,7 @@
         }
         return null;
     });
+    const loading = $derived(page?.status === "Loading");
 
     function handleSignIn() {
         dispatch({ Session: "SignIn" });
@@ -45,10 +47,10 @@
     }
 </script>
 
-<div class="page">
+<div class={signInPage}>
     <ScrollingText />
 
-    <div class="content">
+    <div class={signInContent}>
         <VStack gap="md" align="center">
             <Spacer size="xl" />
             <Logo />
@@ -57,10 +59,16 @@
 		    <form onsubmit={(ev) => { ev.preventDefault(); handleSignIn();}}>
 			<VStack gap="md">
 			    <Input
+                id="sign-in-email"
+                name="email"
 				placeholder="Email"
 				type="email"
+                autocomplete="email"
 				icon={EnvelopeIcon}
 				value={page?.email ?? ""}
+                ariaLabel="Email"
+                ariaInvalid={Boolean(errorMessage)}
+                ariaDescribedby={errorMessage ? "sign-in-error" : undefined}
 				oninput={updateEmail}
 			    />
 			    <VStack gap="xs">
@@ -70,24 +78,31 @@
 				    >
 				</HStack>
 				<Input
+                    id="sign-in-password"
+                    name="password"
 				    placeholder="Password"
 				    type="password"
+                    autocomplete="current-password"
 				    icon={LockIcon}
 				    value={page?.password ?? ""}
+                    ariaLabel="Password"
+                    ariaInvalid={Boolean(errorMessage)}
+                    ariaDescribedby={errorMessage ? "sign-in-error" : undefined}
 				    oninput={updatePassword}
 				/>
 				{#if errorMessage}
-				    <p class="error">{errorMessage}</p>
+				    <p id="sign-in-error" class={signInError} role="alert">{errorMessage}</p>
 				{/if}
 			    </VStack>
 			    <Spacer size="xs" />
 			    <HStack gap="sm" justify="center">
-				<Button loading={page?.status === "Loading"} onclick={handleSignIn}
+				<Button type="submit" loading={loading}
 				    >Sign in</Button
 				>
 				<Button
+                    type="button"
 				    variant="ghost"
-				    loading={page?.status === "Loading"}
+				    loading={loading}
 				    onclick={handleRegister}>Register</Button
 				>
 			    </HStack>
@@ -97,22 +112,3 @@
         </VStack>
     </div>
 </div>
-
-<style>
-    .page {
-        position: relative;
-        min-height: 100vh;
-        overflow: hidden;
-    }
-
-    .content {
-        position: relative;
-        z-index: 1;
-    }
-
-    .error {
-        color: var(--color-error, #e53e3e);
-        font-size: 0.8rem;
-        margin: 0.25rem 0 0 0;
-    }
-</style>
