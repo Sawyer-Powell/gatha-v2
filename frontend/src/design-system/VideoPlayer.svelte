@@ -10,13 +10,21 @@
         paused?: boolean;
         /** Playback speed multiplier. Bindable. */
         playbackRate?: number;
+        /** Video duration in seconds. Bindable once metadata loads. */
+        duration?: number;
+        /** Optional class applied to the video player shell. */
+        classname?: string;
+        /** Optional class applied to the video frame. */
+        frameClassname?: string;
+        /** Enables global keyboard shortcuts for the active workbench view. */
+        shortcuts?: boolean;
     }
 </script>
 
 <script lang="ts">
     import { Pause, Play } from "phosphor-svelte";
     import { FastForward, Rabbit, Rewind, Turtle } from "@lucide/svelte";
-    import { vars } from "../app.css";
+    import RangeInput, { type RangeDot } from "./RangeInput.svelte";
     import {
         buttonVariants,
         videoChrome,
@@ -35,7 +43,6 @@
         videoSpeedValue,
         videoTimeEdit,
         videoTimeInput,
-        videoTitle,
     } from "./design-system.css";
 
     let {
@@ -44,37 +51,33 @@
         currentTime = $bindable(0),
         paused = $bindable(true),
         playbackRate = $bindable(1),
+        duration = $bindable(0),
+        classname = "",
+        frameClassname = "",
+        shortcuts = false,
     }: VideoPlayerProps = $props();
 
     const SKIP_SECONDS = 10;
     const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-    let duration = $state(0);
     let timeDraft = $state("00:00");
+    let editingTime = $state(false);
 
-    const progress = $derived(duration ? (currentTime / duration) * 100 : 0);
     const speedIndex = $derived(Math.max(0, speeds.indexOf(playbackRate)));
     const speedLabel = $derived(`${playbackRate.toFixed(2)}x`);
 
-    // The native range thumb is inset by its own radius at each end (~8% of the
-    // ~100px track), so the fill edge and notch dots map into this 8%–92% band
-    // to line up with where the thumb actually stops.
-    const dotPosition = (i: number) =>
-        speeds.length > 1 ? 8 + (i / (speeds.length - 1)) * 84 : 50;
-    const speedProgress = $derived(dotPosition(speedIndex));
-
-    // Dots on the orange fill use a light color; dots on the bare track use the
-    // dark foreground — so both halves stay legible.
-    const speedDots = $derived(
+    const dotRatio = (i: number) =>
+        speeds.length > 1 ? i / (speeds.length - 1) : 0.5;
+    const speedDots: RangeDot[] = $derived(
         speeds
-            .map((_, i) => {
-                const color =
-                    i <= speedIndex
-                        ? vars.colors.background
-                        : vars.colors.foreground;
-                return `radial-gradient(circle at ${dotPosition(i)}% 50%, ${color} 0 1.5px, transparent 2px)`;
-            })
-            .join(", "),
+            .slice(1, -1)
+            .map((_, dotIndex) => {
+                const i = dotIndex + 1;
+                return {
+                    ratio: dotRatio(i),
+                    active: i <= speedIndex,
+                };
+            }),
     );
 
     function formatTime(seconds: number) {
@@ -106,11 +109,16 @@
         playbackRate = speeds[clamped];
     }
 
-    // Keep the editable timestamp synced to playback unless it's being typed in.
     $effect(() => {
-        if (document.activeElement?.id !== "video-time-edit") {
+        if (!editingTime) {
             timeDraft = formatTime(currentTime);
         }
+    });
+
+    $effect(() => {
+        if (!shortcuts) return;
+        window.addEventListener("keydown", handleShortcut);
+        return () => window.removeEventListener("keydown", handleShortcut);
     });
 
     function handleShortcut(e: KeyboardEvent) {
@@ -150,10 +158,8 @@
     }
 </script>
 
-<svelte:window onkeydown={handleShortcut} />
-
-<section class={videoPlayer}>
-    <div class={videoFrame}>
+<section class="{videoPlayer} {classname}" aria-label={title}>
+    <div class="{videoFrame} {frameClassname}">
         <video
             bind:currentTime
             bind:duration
@@ -167,98 +173,103 @@
             <track kind="captions" />
         </video>
     </div>
+</section>
 
-    <div class={videoChrome}>
-        <input
-            class={videoScrubber}
-            type="range"
-            min="0"
+<div class={videoChrome} role="group" aria-label={`Playback controls for ${title}`}>
+    <div class={videoChromeStack}>
+        <div class={videoTimeEdit}>
+            <input
+                class={videoTimeInput}
+                value={timeDraft}
+                aria-label="Edit timestamp"
+                onfocus={() => (editingTime = true)}
+                oninput={(e) => (timeDraft = e.currentTarget.value)}
+                onblur={() => {
+                    editingTime = false;
+                    commitTimeEdit();
+                }}
+                onkeydown={(e) => {
+                    if (e.key === "Enter") {
+                        editingTime = false;
+                        commitTimeEdit();
+                        e.currentTarget.blur();
+                    }
+                    if (e.key === "Escape") {
+                        editingTime = false;
+                        timeDraft = formatTime(currentTime);
+                        e.currentTarget.blur();
+                    }
+                }}
+            />
+            <span class={videoDuration}>/ {formatTime(duration)}</span>
+        </div>
+
+        <RangeInput
+            classname={videoScrubber}
+            min={0}
             max={duration || 0}
             step="0.01"
             value={currentTime}
-            style={`--progress: ${progress}%`}
-            aria-label="Scrub video timeline"
+            ariaLabel="Scrub video timeline"
             disabled={duration === 0}
-            oninput={(e) => seek(e.currentTarget.valueAsNumber)}
+            oninput={seek}
         />
 
-        <div class={videoChromeStack}>
-            <div class={videoTitle}>{title}</div>
+        <div class={videoControlCluster}>
+            <button
+                class="{buttonVariants.secondary} {videoControlButton}"
+                type="button"
+                title="Rewind 10s (←)"
+                aria-label="Rewind 10 seconds"
+                onclick={() => seek(currentTime - SKIP_SECONDS)}
+            >
+                <Rewind size={16} />
+                <span class={videoShortcut} aria-hidden="true">←</span>
+            </button>
 
-            <div class={videoTimeEdit}>
-                <input
-                    id="video-time-edit"
-                    class={videoTimeInput}
-                    value={timeDraft}
-                    aria-label="Edit timestamp"
-                    oninput={(e) => (timeDraft = e.currentTarget.value)}
-                    onblur={commitTimeEdit}
-                    onkeydown={(e) => {
-                        if (e.key === "Enter") commitTimeEdit();
-                        if (e.key === "Escape")
-                            timeDraft = formatTime(currentTime);
-                    }}
-                />
-                <span class={videoDuration}>/ {formatTime(duration)}</span>
-            </div>
+            <button
+                class="{buttonVariants.primary} {videoControlButton}"
+                type="button"
+                title="Play or pause (Space)"
+                aria-label={paused ? "Play video" : "Pause video"}
+                onclick={() => (paused = !paused)}
+            >
+                {#if paused}
+                    <Play size={16} weight="bold" />
+                {:else}
+                    <Pause size={16} weight="bold" />
+                {/if}
+                <span class={videoShortcut} aria-hidden="true">Space</span>
+            </button>
 
-            <div class={videoControlCluster}>
-                <button
-                    class="{buttonVariants.secondary} {videoControlButton}"
-                    type="button"
-                    title="Rewind 10s (←)"
-                    aria-label="Rewind 10 seconds"
-                    onclick={() => seek(currentTime - SKIP_SECONDS)}
-                >
-                    <Rewind size={16} />
-                    <span class={videoShortcut} aria-hidden="true">←</span>
-                </button>
+            <button
+                class="{buttonVariants.secondary} {videoControlButton}"
+                type="button"
+                title="Forward 10s (→)"
+                aria-label="Forward 10 seconds"
+                onclick={() => seek(currentTime + SKIP_SECONDS)}
+            >
+                <FastForward size={16} />
+                <span class={videoShortcut} aria-hidden="true">→</span>
+            </button>
+        </div>
 
-                <button
-                    class="{buttonVariants.primary} {videoControlButton}"
-                    type="button"
-                    title="Play or pause (Space)"
-                    aria-label={paused ? "Play video" : "Pause video"}
-                    onclick={() => (paused = !paused)}
-                >
-                    {#if paused}
-                        <Play size={16} weight="bold" />
-                    {:else}
-                        <Pause size={16} weight="bold" />
-                    {/if}
-                    <span class={videoShortcut} aria-hidden="true">Space</span>
-                </button>
-
-                <button
-                    class="{buttonVariants.secondary} {videoControlButton}"
-                    type="button"
-                    title="Forward 10s (→)"
-                    aria-label="Forward 10 seconds"
-                    onclick={() => seek(currentTime + SKIP_SECONDS)}
-                >
-                    <FastForward size={16} />
-                    <span class={videoShortcut} aria-hidden="true">→</span>
-                </button>
-            </div>
-
-            <div class={videoSpeedControl}>
-                <Turtle class={videoSpeedIcon} size={16} aria-hidden="true" />
-                <input
-                    class={videoSpeedSlider}
-                    type="range"
-                    min="0"
-                    max={speeds.length - 1}
-                    step="1"
-                    value={speedIndex}
-                    style={`--speed-progress: ${speedProgress}%; --speed-dots: ${speedDots}`}
-                    aria-label={`Playback speed: ${speedLabel}`}
-                    title={`Playback speed: ${speedLabel}`}
-                    oninput={(e) => setSpeed(e.currentTarget.valueAsNumber)}
-                    onkeydown={handleSpeedKeydown}
-                />
-                <Rabbit class={videoSpeedIcon} size={16} aria-hidden="true" />
-                <span class={videoSpeedValue}>{speedLabel}</span>
-            </div>
+        <div class={videoSpeedControl}>
+            <Turtle class={videoSpeedIcon} size={16} aria-hidden="true" />
+            <RangeInput
+                classname={videoSpeedSlider}
+                min={0}
+                max={speeds.length - 1}
+                step={1}
+                value={speedIndex}
+                dots={speedDots}
+                ariaLabel={`Playback speed: ${speedLabel}`}
+                title={`Playback speed: ${speedLabel}`}
+                oninput={setSpeed}
+                onkeydown={handleSpeedKeydown}
+            />
+            <Rabbit class={videoSpeedIcon} size={16} aria-hidden="true" />
+            <span class={videoSpeedValue}>{speedLabel}</span>
         </div>
     </div>
-</section>
+</div>

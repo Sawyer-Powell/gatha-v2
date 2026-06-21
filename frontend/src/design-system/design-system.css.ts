@@ -259,6 +259,27 @@ export const buttonPressedVariants = styleVariants({
   },
 });
 
+export const selectableSurface = style([
+  buttonVariants.ghost,
+  buttonShapeVariants.square,
+  {
+    width: "100%",
+    justifyContent: "stretch",
+  },
+]);
+
+export const selectableSurfaceActive = style([
+  buttonPressedVariants.ghost,
+  {
+    borderColor: vars.colors.primary,
+    cursor: "default",
+    ":hover": {
+      borderColor: vars.colors.primary,
+      boxShadow: "none",
+    },
+  },
+]);
+
 // Shared control sizing (inputs, dropdowns, etc.)
 const controlSize = {
   sm: { padding: `0.25rem 0.625rem`, fontSize: "0.75rem" },
@@ -410,79 +431,6 @@ export const modalContent = style({
       transform: "scale(1) translateY(0)",
       opacity: 1,
     },
-  },
-});
-
-// Slider
-export const sliderTrack = style({
-  position: "relative",
-  cursor: "pointer",
-  touchAction: "none",
-  userSelect: "none",
-});
-
-export const sliderTrackDirection = styleVariants({
-  horizontal: {
-    width: "100%",
-    height: "1.5rem",
-    display: "flex",
-    alignItems: "center",
-  },
-  vertical: {
-    width: "1.5rem",
-    height: "100%",
-    display: "flex",
-    justifyContent: "center",
-  },
-});
-
-export const sliderRail = style({
-  position: "relative",
-  background: vars.colors.border,
-  borderRadius: radius.pill,
-  flex: "none",
-});
-
-export const sliderRailDirection = styleVariants({
-  horizontal: { width: "100%", height: "0.375rem" },
-  vertical: { width: "0.375rem", height: "100%" },
-});
-
-export const sliderFill = style({
-  position: "absolute",
-  background: vars.colors.primary,
-  borderRadius: radius.pill,
-});
-
-export const sliderFillDirection = styleVariants({
-  horizontal: { top: 0, bottom: 0, left: 0 },
-  vertical: { left: 0, right: 0, bottom: 0 },
-});
-
-export const sliderThumb = style({
-  position: "absolute",
-  width: "1rem",
-  height: "1rem",
-  borderRadius: "50%",
-  background: vars.colors.primary,
-  border: `2px solid ${vars.colors.background}`,
-  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
-  transition: `transform ${vars.transition.fast}`,
-  ":hover": {
-    transform: "scale(1.05)",
-  },
-});
-
-export const sliderThumbDirection = styleVariants({
-  horizontal: {
-    top: "50%",
-    marginTop: "calc(-0.5rem - 2px)",
-    marginLeft: "calc(-0.5rem - 2px)",
-  },
-  vertical: {
-    left: "50%",
-    marginLeft: "calc(-0.5rem - 2px)",
-    marginBottom: "calc(-0.5rem - 2px)",
   },
 });
 
@@ -709,7 +657,13 @@ export const comboboxSearchInput = style({
 // Video player
 const controlHeight = "2.1875rem";
 
-const rangeTrack = { height: "0.375rem", borderRadius: radius.pill } as const;
+const rangeTrack = { height: "6px", borderRadius: radius.pill } as const;
+export const rangeThumbPixels = 16;
+const rangeThumbSize = `${rangeThumbPixels}px`;
+const rangeHalfThumb = `${rangeThumbPixels / 2}px`;
+const rangeHalfTrack = "3px";
+const rangeTrackSize = "6px";
+const rangeRailWidth = `calc(100% - ${rangeThumbSize})`;
 const rangeThumb = {
   boxSizing: "border-box",
   width: "1rem",
@@ -720,40 +674,79 @@ const rangeThumb = {
   boxShadow: "0 1px 3px rgba(0, 0, 0, 0.2)",
 } as const;
 
-// Shared base for the scrubber + speed sliders — only the track fill differs.
-const rangeInput = (fill: string) =>
-  style({
-    appearance: "none",
-    display: "block",
-    width: "100%",
-    height: "1.25rem",
-    padding: 0,
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    selectors: {
-      "&:focus-visible": {
-        outline: `2px solid ${vars.colors.primary}`,
-        outlineOffset: "2px",
-      },
-      "&::-webkit-slider-runnable-track": { ...rangeTrack, background: fill },
-      "&::-webkit-slider-thumb": {
-        ...rangeThumb,
-        appearance: "none",
-        marginTop: "-0.3125rem",
-      },
-      "&::-moz-range-track": { ...rangeTrack, background: vars.colors.border },
-      "&::-moz-range-progress": {
-        ...rangeTrack,
-        background: vars.colors.primary,
-      },
-      "&::-moz-range-thumb": { ...rangeThumb },
-      "&:disabled": { cursor: "default", opacity: 0.7 },
-    },
-  });
+const rangeFillWidth = "var(--range-fill-width, 0px)";
+const rangeImages = [
+  `linear-gradient(${vars.colors.primary}, ${vars.colors.primary})`,
+  `radial-gradient(circle, ${vars.colors.primary} 0 ${rangeHalfTrack}, transparent 3.5px)`,
+  `radial-gradient(circle, ${vars.colors.primary} 0 ${rangeHalfTrack}, transparent 3.5px)`,
+  `linear-gradient(${vars.colors.border}, ${vars.colors.border})`,
+  `radial-gradient(circle, ${vars.colors.border} 0 ${rangeHalfTrack}, transparent 3.5px)`,
+  `radial-gradient(circle, ${vars.colors.border} 0 ${rangeHalfTrack}, transparent 3.5px)`,
+].join(", ");
 
-const fillTrack = (pos: string) =>
-  `linear-gradient(to right, ${vars.colors.primary} ${pos}, ${vars.colors.border} ${pos})`;
+const rangePositions = (fillWidth: string) =>
+  [
+    `${rangeHalfThumb} center`,
+    `calc(${rangeHalfThumb} - ${rangeHalfTrack}) center`,
+    `calc(${rangeHalfThumb} + ${fillWidth} - ${rangeHalfTrack}) center`,
+    `${rangeHalfThumb} center`,
+    `calc(${rangeHalfThumb} - ${rangeHalfTrack}) center`,
+    `calc(100% - ${rangeHalfThumb} - ${rangeHalfTrack}) center`,
+  ].join(", ");
+
+const rangeSizes = (fillWidth: string) =>
+  [
+    `${fillWidth} ${rangeTrackSize}`,
+    `${rangeTrackSize} ${rangeTrackSize}`,
+    `${rangeTrackSize} ${rangeTrackSize}`,
+    `${rangeRailWidth} ${rangeTrackSize}`,
+    `${rangeTrackSize} ${rangeTrackSize}`,
+    `${rangeTrackSize} ${rangeTrackSize}`,
+  ].join(", ");
+
+// Shared base for range controls. The input is half a thumb wider on each side;
+// the native rail is transparent, and the visible rail is drawn from half-thumb
+// to half-thumb so the thumb center marks the first/last pixel.
+export const timelineScrubber = style({
+  appearance: "none",
+  display: "block",
+  width: `calc(100% + ${rangeThumbSize})`,
+  height: "1.25rem",
+  margin: `0 -${rangeHalfThumb}`,
+  padding: 0,
+  border: "none",
+  backgroundColor: "transparent",
+  backgroundImage: `var(--range-dot-images, none), ${rangeImages}`,
+  backgroundPosition: `var(--range-dot-positions, 0 0), ${rangePositions(rangeFillWidth)}`,
+  backgroundSize: `var(--range-dot-sizes, auto), ${rangeSizes(rangeFillWidth)}`,
+  backgroundRepeat: `var(--range-dot-repeats, no-repeat), no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat`,
+  cursor: "pointer",
+  selectors: {
+    "&:focus-visible": {
+      outline: `2px solid ${vars.colors.primary}`,
+      outlineOffset: "2px",
+    },
+    "&::-webkit-slider-runnable-track": {
+      ...rangeTrack,
+      background: "transparent",
+    },
+    "&::-webkit-slider-thumb": {
+      ...rangeThumb,
+      appearance: "none",
+      marginTop: "-0.3125rem",
+    },
+    "&::-moz-range-track": {
+      ...rangeTrack,
+      background: "transparent",
+    },
+    "&::-moz-range-progress": {
+      ...rangeTrack,
+      background: "transparent",
+    },
+    "&::-moz-range-thumb": { ...rangeThumb },
+    "&:disabled": { cursor: "default", opacity: 0.7 },
+  },
+});
 
 export const videoPlayer = style([
   cardBase,
@@ -761,8 +754,8 @@ export const videoPlayer = style([
     width: "100%",
     maxWidth: "52rem",
     boxSizing: "border-box",
-    containerType: "inline-size",
-    overflow: "visible",
+    overflow: "hidden",
+    background: vars.colors.foreground,
   },
 ]);
 
@@ -771,8 +764,7 @@ export const videoFrame = style({
   aspectRatio: "16 / 9",
   width: "100%",
   overflow: "hidden",
-  borderTopLeftRadius: `calc(${radius.lg} - 1px)`,
-  borderTopRightRadius: `calc(${radius.lg} - 1px)`,
+  borderRadius: `calc(${radius.lg} - 1px)`,
 });
 
 export const videoElement = style({
@@ -783,10 +775,30 @@ export const videoElement = style({
 });
 
 export const videoChrome = style({
-  padding: `${spacingScale.md} ${spacingScale.lg}`,
+  position: "fixed",
+  left: "50%",
+  bottom: spacingScale.md,
+  transform: "translateX(-50%)",
+  zIndex: 30,
+  width: "min(calc(100vw - 2rem), 54rem)",
+  boxSizing: "border-box",
+  padding: `0.625rem ${spacingScale.md}`,
+  border: `1px solid ${vars.colors.border}`,
+  borderRadius: radius.pill,
+  background: "rgba(249, 245, 215, 0.94)",
+  boxShadow: "0 1rem 2.5rem rgba(60, 56, 54, 0.18)",
+  backdropFilter: "blur(16px)",
+  containerType: "inline-size",
+  "@media": {
+    "(max-width: 48rem)": {
+      bottom: "0.625rem",
+      width: "calc(100vw - 1.25rem)",
+      padding: `0.5rem ${spacingScale.sm}`,
+    },
+  },
   "@container": {
-    "(max-width: 640px)": {
-      padding: spacingScale.md,
+    "(max-width: 44rem)": {
+      borderRadius: radius.lg,
     },
   },
 });
@@ -794,26 +806,26 @@ export const videoChrome = style({
 export const videoChromeStack = style({
   display: "grid",
   alignItems: "center",
-  columnGap: spacingScale.sm,
-  rowGap: spacingScale.md,
-  gridTemplateColumns: "minmax(12.5rem, 1fr) auto minmax(12.5rem, 1fr)",
-  gridTemplateAreas: '"title title title" "time transport speed"',
+  columnGap: spacingScale.md,
+  rowGap: spacingScale.sm,
+  gridTemplateColumns: "auto minmax(8rem, 1fr) auto minmax(10rem, 12.5rem)",
+  gridTemplateAreas: '"time scrubber transport speed"',
   "@container": {
-    "(max-width: 640px)": {
-      // On mobile the transport tucks up next to the truncated title, and the
-      // time + speed share the row below — far less vertical footprint.
-      gridTemplateColumns: "minmax(0, 1fr) 11rem",
-      gridTemplateAreas: '"title transport" "time speed"',
-      columnGap: spacingScale.md,
+    "(max-width: 44rem)": {
+      gridTemplateColumns: "auto 1fr auto",
+      gridTemplateAreas: '"time scrubber transport" "speed speed speed"',
       rowGap: spacingScale.sm,
+    },
+    "(max-width: 30rem)": {
+      gridTemplateColumns: "1fr auto",
+      gridTemplateAreas: '"time transport" "scrubber scrubber" "speed speed"',
     },
   },
 });
 
-export const videoScrubber = style([
-  rangeInput(fillTrack("var(--progress, 0%)")),
-  { marginBottom: spacingScale.sm },
-]);
+export const videoScrubber = style({
+  gridArea: "scrubber",
+});
 
 export const videoTitle = style({
   gridArea: "title",
@@ -833,9 +845,9 @@ export const videoTimeEdit = style({
   gap: spacingScale.sm,
   minWidth: 0,
   justifySelf: "start",
-  width: "12.5rem",
+  width: "max-content",
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       width: "max-content",
     },
   },
@@ -848,7 +860,7 @@ export const videoDuration = style({
   whiteSpace: "nowrap",
   flexShrink: 0,
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       display: "none",
     },
   },
@@ -872,7 +884,7 @@ export const videoTimeInput = style({
     borderColor: vars.colors.primary,
   },
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       width: "5.5rem",
     },
   },
@@ -885,7 +897,7 @@ export const videoControlCluster = style({
   gap: spacingScale.sm,
   justifySelf: "center",
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       justifySelf: "end",
     },
   },
@@ -911,7 +923,7 @@ export const videoControlButton = style({
 
 export const videoSpeedControl = style({
   vars: {
-    "--speed-progress": "40%",
+    "--speed-ratio": "0.4",
   },
   gridArea: "speed",
   display: "grid",
@@ -920,15 +932,15 @@ export const videoSpeedControl = style({
   gap: spacingScale.sm,
   position: "relative",
   height: controlHeight,
-  width: "12.5rem",
+  width: "100%",
   boxSizing: "border-box",
   justifySelf: "end",
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       gridTemplateColumns: "1rem 1fr 1rem",
       width: "100%",
-      maxWidth: "11rem",
-      justifySelf: "end",
+      maxWidth: "none",
+      justifySelf: "stretch",
     },
   },
 });
@@ -938,9 +950,7 @@ export const videoSpeedIcon = style({
   flexShrink: 0,
 });
 
-export const videoSpeedSlider = rangeInput(
-  `var(--speed-dots, none), ${fillTrack("var(--speed-progress, 40%)")}`,
-);
+export const videoSpeedSlider = style({});
 
 export const videoSpeedValue = style({
   color: vars.colors.foreground,
@@ -950,7 +960,7 @@ export const videoSpeedValue = style({
   textAlign: "right",
   whiteSpace: "nowrap",
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       display: "none",
     },
   },
@@ -974,7 +984,7 @@ export const videoShortcut = style({
   pointerEvents: "none",
   transition: `opacity ${vars.transition.fast}`,
   "@container": {
-    "(max-width: 640px)": {
+    "(max-width: 44rem)": {
       display: "none",
     },
   },

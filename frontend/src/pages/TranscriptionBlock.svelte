@@ -1,0 +1,162 @@
+<script module lang="ts">
+    export interface TranscriptionBlockProps {
+        index: number;
+        start: number;
+        end: number;
+        text: string;
+        currentTime: number;
+        mediaDuration?: number;
+        active?: boolean;
+        onseek?: (time: number) => void;
+    }
+</script>
+
+<script lang="ts">
+    import { tick } from "svelte";
+    import {
+        selectableSurface,
+        selectableSurfaceActive,
+    } from "$lib/design-system/design-system.css";
+    import RangeInput from "$lib/design-system/RangeInput.svelte";
+    import {
+        transcription_block,
+        transcription_index,
+        transcription_meta,
+        transcription_progress_exit,
+        transcription_progress_shell,
+        transcription_text,
+        transcription_textarea,
+        transcription_time,
+    } from "./page.css";
+
+    let {
+        index,
+        start,
+        end,
+        text = $bindable(""),
+        currentTime,
+        mediaDuration = 0,
+        active = false,
+        onseek,
+    }: TranscriptionBlockProps = $props();
+
+    let blockEl = $state<HTMLElement>();
+    let renderScrubber = $state(false);
+    let scrubberExiting = $state(false);
+    let scrubDisplayTime = $state<number | null>(null);
+    let scrubSeekTime = $state<number | null>(null);
+    const SCRUB_GUARD_SECONDS = 0.08;
+    const visualEnd = $derived(
+        mediaDuration > start && mediaDuration < end ? mediaDuration : end,
+    );
+    const guardedEnd = $derived(Math.max(start, visualEnd - SCRUB_GUARD_SECONDS));
+    const playbackDisplayTime = $derived(Math.min(visualEnd, Math.max(start, currentTime)));
+    const scrubTime = $derived(scrubDisplayTime ?? playbackDisplayTime);
+    const ghostClass = $derived(
+        `${selectableSurface} ${transcription_block}`,
+    );
+    const activeClass = $derived(
+        `${ghostClass} ${selectableSurfaceActive}`,
+    );
+
+    function formatTime(seconds: number) {
+        const safe = Math.max(0, Math.floor(seconds));
+        return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+    }
+
+    $effect(() => {
+        if (active) {
+            renderScrubber = true;
+            scrubberExiting = false;
+            tick().then(() => blockEl?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+        } else if (renderScrubber) {
+            scrubberExiting = true;
+        }
+    });
+
+    $effect(() => {
+        if (!active) {
+            scrubDisplayTime = null;
+            scrubSeekTime = null;
+        } else if (
+            scrubSeekTime !== null &&
+            Math.abs(currentTime - scrubSeekTime) > 0.03
+        ) {
+            scrubDisplayTime = null;
+            scrubSeekTime = null;
+        }
+    });
+
+    function selectBlock() {
+        if (!active) onseek?.(start);
+    }
+
+    function seekWithinBlock(displayTime: number) {
+        const seekTime = Math.min(displayTime, guardedEnd);
+        scrubDisplayTime = displayTime;
+        scrubSeekTime = seekTime;
+        onseek?.(seekTime);
+    }
+
+    function finishScrubberExit() {
+        if (!scrubberExiting) return;
+        renderScrubber = false;
+        scrubberExiting = false;
+    }
+</script>
+
+{#snippet blockContent()}
+    <div class={transcription_index}>#{index}</div>
+    <div>
+        <div class={transcription_meta}>
+            <span class={transcription_time}>{formatTime(start)} - {formatTime(end)}</span>
+        </div>
+        {#if active}
+            <textarea
+                class="{transcription_text} {transcription_textarea}"
+                bind:value={text}
+                aria-label={`Edit transcript block ${index}`}
+                rows="1"
+            ></textarea>
+        {:else}
+            <p class={transcription_text}>{text}</p>
+        {/if}
+    </div>
+{/snippet}
+
+{#if active || renderScrubber}
+    <article
+        bind:this={blockEl}
+        class={active ? activeClass : ghostClass}
+        aria-current={active ? "true" : undefined}
+    >
+        {@render blockContent()}
+        {#if renderScrubber}
+            <div
+                class="{transcription_progress_shell} {scrubberExiting
+                    ? transcription_progress_exit
+                    : ''}"
+                onanimationend={finishScrubberExit}
+            >
+                <RangeInput
+                    min={start}
+                    max={visualEnd}
+                    step="0.01"
+                    value={scrubTime}
+                    ariaLabel={`Seek transcript block ${index}`}
+                    disabled={!active}
+                    oninput={seekWithinBlock}
+                />
+            </div>
+        {/if}
+    </article>
+{:else}
+    <button
+        bind:this={blockEl}
+        class={ghostClass}
+        type="button"
+        onclick={selectBlock}
+    >
+        {@render blockContent()}
+    </button>
+{/if}

@@ -16,7 +16,7 @@
     import Card from "$lib/design-system/Card.svelte";
     import Logo from "$lib/design-system/Logo.svelte";
     import Modal from "$lib/design-system/Modal.svelte";
-    import Slider from "$lib/design-system/Slider.svelte";
+    import RangeInput from "$lib/design-system/RangeInput.svelte";
     import Dropdown from "$lib/design-system/Dropdown.svelte";
     import Combobox from "$lib/design-system/Combobox.svelte";
     import VideoPlayer from "$lib/design-system/VideoPlayer.svelte";
@@ -137,13 +137,13 @@
     </VStack>
     <Switch checked={switchOn} onchange={(v) => (switchOn = v)} />
 
-    <H3>Slider</H3>
-    <Slider value={sliderValue} onchange={(v) => sliderValue = v} />
+    <H3>Range Input</H3>
+    <RangeInput
+        value={sliderValue}
+        ariaLabel="Design system range input"
+        oninput={(v) => sliderValue = v}
+    />
     <p>{sliderValue.toFixed(2)}</p>
-    <H4>Vertical</H4>
-    <div style="height: 8rem;">
-        <Slider direction="vertical" value={sliderValue} onchange={(v) => sliderValue = v} />
-    </div>
 
     <Spacer size="lg" />
 
