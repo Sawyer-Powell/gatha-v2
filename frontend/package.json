@@ -10,7 +10,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "shot": "node scripts/visual-regression.mjs",
     "shot:all": "node scripts/visual-regression.mjs --all",
-    "shot:baseline": "node scripts/visual-regression.mjs --baseline"
+    "shot:baseline": "node scripts/visual-regression.mjs --baseline",
+    "shot:browsers": "node scripts/cross-browser-probe.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",

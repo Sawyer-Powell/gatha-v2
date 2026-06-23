@@ -20,6 +20,7 @@
         selectableSurface,
         selectableSurfaceActive,
     } from "$lib/design-system/design-system.css";
+    import AutoSizeTextarea from "$lib/design-system/AutoSizeTextarea.svelte";
     import RangeInput from "$lib/design-system/RangeInput.svelte";
     import { formatClockTime } from "$lib/utils/time";
     import {
@@ -65,7 +66,6 @@
     const activeClass = $derived(
         `${ghostClass} ${selectableSurfaceActive}`,
     );
-
     $effect(() => {
         if (active) {
             renderScrubber = true;
@@ -124,13 +124,12 @@
             <span class={transcription_time}>{formatClockTime(start)} - {formatClockTime(end)}</span>
         </div>
         {#if active}
-            <textarea
-                class="{transcription_text} {transcription_textarea}"
+            <AutoSizeTextarea
+                classname="{transcription_text} {transcription_textarea}"
                 value={text}
-                aria-label={`Edit transcript block ${index}`}
-                rows="1"
-                oninput={(e) => ontext?.(e.currentTarget.value)}
-            ></textarea>
+                ariaLabel={`Edit transcript block ${index}`}
+                oninput={(next) => ontext?.(next)}
+            />
         {:else}
             <p class={transcription_text}>{text}</p>
         {/if}

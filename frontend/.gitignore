@@ -13,6 +13,7 @@ dist-ssr
 *.local
 visual-regression/*.current.png
 visual-regression/*.diff.png
+cross-browser-screenshots/
 
 # Editor directories and files
 .vscode/*

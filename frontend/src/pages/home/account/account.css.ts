@@ -128,7 +128,6 @@ export const account_profile_name_input = style([
     background: "transparent",
     fontFamily: vars.fonts.heading,
     boxSizing: "border-box",
-    fieldSizing: "content",
   },
 ]);
 

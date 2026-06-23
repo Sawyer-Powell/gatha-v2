@@ -85,6 +85,9 @@
     let timeDraft = $state("00:00");
     let editingTime = $state(false);
     let aspectRatio = $state(16 / 9);
+    let videoEl = $state<HTMLVideoElement>();
+    let playRequestId = 0;
+    let playPending = $state(false);
 
     const speedIndex = $derived(Math.max(0, speeds.indexOf(playbackRate)));
     const speedLabel = $derived(`${playbackRate.toFixed(2)}x`);
@@ -104,14 +107,64 @@
     );
 
     function seek(seconds: number) {
-        currentTime = Math.max(0, Math.min(seconds, duration || seconds));
+        const next = Math.max(0, Math.min(seconds, duration || seconds));
+        currentTime = next;
+        if (videoEl && Number.isFinite(next) && Math.abs(videoEl.currentTime - next) > 0.03) {
+            videoEl.currentTime = next;
+        }
     }
 
-    function updateAspectRatio(e: Event) {
-        const video = e.currentTarget as HTMLVideoElement;
+    function syncMetadata(video: HTMLVideoElement) {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
             aspectRatio = video.videoWidth / video.videoHeight;
         }
+        if (Number.isFinite(video.duration)) duration = video.duration;
+    }
+
+    function syncMediaTime(e: Event) {
+        const video = e.currentTarget as HTMLVideoElement;
+        currentTime = video.currentTime;
+    }
+
+    async function playVideo() {
+        const video = videoEl;
+        if (!video) return;
+        const requestId = ++playRequestId;
+        const playPromise = video.play();
+        playPending = true;
+        paused = false;
+        try {
+            await playPromise;
+        } catch {
+            if (requestId !== playRequestId) return;
+            paused = true;
+        } finally {
+            if (requestId === playRequestId) playPending = false;
+        }
+    }
+
+    function pauseVideo() {
+        playRequestId += 1;
+        playPending = false;
+        videoEl?.pause();
+        paused = true;
+    }
+
+    function togglePlayback() {
+        const video = videoEl;
+        const isPaused = video ? video.paused : paused;
+        if (isPaused) void playVideo();
+        else pauseVideo();
+    }
+
+    function handlePause() {
+        if (videoEl) currentTime = videoEl.currentTime;
+        playPending = false;
+        paused = true;
+    }
+
+    function handlePlay() {
+        paused = false;
     }
 
     function commitTimeEdit() {
@@ -123,6 +176,7 @@
     function setSpeed(index: number) {
         const clamped = Math.max(0, Math.min(speeds.length - 1, Math.round(index)));
         playbackRate = speeds[clamped];
+        if (videoEl) videoEl.playbackRate = playbackRate;
     }
 
     function stepBackward() {
@@ -159,7 +213,7 @@
             return;
         }
         const actions: Record<string, () => void> = {
-            " ": () => (paused = !paused),
+            " ": togglePlayback,
             ArrowLeft: stepBackward,
             ArrowRight: stepForward,
         };
@@ -184,6 +238,34 @@
             setSpeed(targets[e.key]);
         }
     }
+
+    $effect(() => {
+        const video = videoEl;
+        if (!video) return;
+        if (
+            Number.isFinite(currentTime) &&
+            Math.abs(video.currentTime - currentTime) > 0.08
+        ) {
+            video.currentTime = currentTime;
+        }
+    });
+
+    $effect(() => {
+        const video = videoEl;
+        if (!video) return;
+        if (video.playbackRate !== playbackRate) video.playbackRate = playbackRate;
+    });
+
+    $effect(() => {
+        const video = videoEl;
+        paused;
+        playPending;
+        if (!video) return;
+        if (playPending) return;
+        if (paused && !video.paused) {
+            video.pause();
+        }
+    });
 </script>
 
 <section
@@ -192,19 +274,21 @@
     style={`--video-aspect-ratio: ${aspectRatio}`}
 >
     <div class="{videoFrame} {frameClassname}">
+        <!-- svelte-ignore a11y_media_has_caption -->
         <video
-            bind:currentTime
-            bind:duration
-            bind:paused
-            bind:playbackRate
+            bind:this={videoEl}
             class={videoElement}
             {src}
-            preload="metadata"
+            preload="auto"
             playsinline
-            onloadedmetadata={updateAspectRatio}
-        >
-            <track kind="captions" />
-        </video>
+            onloadedmetadata={(e) => syncMetadata(e.currentTarget)}
+            ontimeupdate={syncMediaTime}
+            onseeking={syncMediaTime}
+            ondurationchange={(e) => syncMetadata(e.currentTarget)}
+            onplay={handlePlay}
+            onpause={handlePause}
+            onratechange={(e) => (playbackRate = e.currentTarget.playbackRate)}
+        ></video>
     </div>
 </section>
 
@@ -266,7 +350,7 @@
                     type="button"
                     title="Play or pause (Space)"
                     aria-label={paused ? "Play video" : "Pause video"}
-                    onclick={() => (paused = !paused)}
+                    onclick={togglePlayback}
                 >
                     {#if paused}
                         <Play size={16} weight="bold" />

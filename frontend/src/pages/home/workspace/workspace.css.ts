@@ -384,7 +384,6 @@ export const transcription_textarea = style([
     background: "transparent",
     fontFamily: vars.fonts.prose,
     boxSizing: "border-box",
-    fieldSizing: "content",
   },
 ]);
 

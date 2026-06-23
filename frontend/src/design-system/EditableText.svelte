@@ -1,4 +1,6 @@
 <script lang="ts">
+    import AutoSizeInput from "./AutoSizeInput.svelte";
+
     let {
         value = $bindable(""),
         classname = "",
@@ -20,17 +22,16 @@
     }
 </script>
 
-<textarea
-    class={classname}
-    {value}
-    aria-label={ariaLabel}
+<AutoSizeInput
+    bind:value
+    {classname}
+    {ariaLabel}
     {placeholder}
-    rows="1"
-    oninput={(e) => commitInput(e.currentTarget.value)}
+    oninput={commitInput}
     onkeydown={(e) => {
         if (e.key === "Enter") {
             e.preventDefault();
-            e.currentTarget.blur();
+            (e.currentTarget as HTMLElement).blur();
         }
     }}
-></textarea>
+/>

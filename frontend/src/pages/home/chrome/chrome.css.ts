@@ -32,9 +32,6 @@ export const top_bar = style({
 
 export const top_bar_title = style({
   minWidth: 0,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
   color: vars.colors.foreground,
   fontFamily: vars.fonts.heading,
   fontSize: textScale.lg,
@@ -51,7 +48,9 @@ export const top_bar_title_group = style({
 
 export const top_bar_title_stack = style({
   minWidth: 0,
-  display: "grid",
+  maxWidth: "100%",
+  flex: "0 1 auto",
+  display: "block",
   gap: "0.125rem",
 });
 
@@ -70,11 +69,11 @@ export const top_bar_title_input = style([
     borderLeft: "none",
     outline: "none",
     resize: "none",
+    overflow: "hidden",
     background: "transparent",
     flex: "0 1 auto",
     lineHeight: 1.4,
     boxSizing: "border-box",
-    fieldSizing: "content",
   },
 ]);
 
