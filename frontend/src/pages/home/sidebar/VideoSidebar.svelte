@@ -46,20 +46,33 @@
         sidebar_video_stack,
     } from "./sidebar.css";
 
+    type SidebarStatePatch = Partial<{
+        videoSearchOpen: boolean;
+        videoSearch: string;
+        uploaderFilterOpen: boolean;
+        uploaderFilterSearch: string;
+        uploaderFilterEmails: string[];
+    }>;
+
     /*
      * Future WASM boundary:
      * - WASM-owned state/callbacks: videos, selectedVideoId, selected video
-     *   changes, and upload creation.
-     * - Local UI state: search/filter text, popover state, file input ref, and
-     *   scroll feather measurement.
+     *   changes, upload creation, and route-level list filters.
+     * - Local UI state: file/input refs and scroll feather measurement.
      */
     let {
         videos,
         members,
         selectedVideoId,
         open,
+        videoSearchOpen = $bindable(false),
+        videoSearch = $bindable(""),
+        uploaderFilterOpen = $bindable(false),
+        uploaderFilterSearch = $bindable(""),
+        uploaderFilterEmails = $bindable<string[]>([]),
         profileName,
         profileImageUrl,
+        onsidebarState,
         onselect,
         onfiles,
         ontransitionend,
@@ -68,8 +81,14 @@
         members: OrgMember[];
         selectedVideoId: string;
         open: boolean;
+        videoSearchOpen?: boolean;
+        videoSearch?: string;
+        uploaderFilterOpen?: boolean;
+        uploaderFilterSearch?: string;
+        uploaderFilterEmails?: string[];
         profileName: (email: string) => string;
         profileImageUrl: (email: string) => string;
+        onsidebarState: (patch: SidebarStatePatch) => void;
         onselect: (video: VideoItem) => void;
         onfiles: (files: FileList | null) => void;
         ontransitionend: (event: TransitionEvent) => void;
@@ -80,11 +99,6 @@
     let videoSearchInput = $state<HTMLInputElement>();
     let uploaderFilterInput = $state<HTMLInputElement>();
     let sidebarScroller = $state<HTMLElement>();
-    let videoSearchOpen = $state(false);
-    let videoSearch = $state("");
-    let uploaderFilterOpen = $state(false);
-    let uploaderFilterSearch = $state("");
-    let uploaderFilterEmails = $state<string[]>([]);
     let sidebarFeather = $state({ top: 0, bottom: 0 });
 
     const filteredVideos = $derived.by(() => {
@@ -111,6 +125,16 @@
     const selectedUploaderOptions = $derived(
         uploaderOptions.filter((option) => uploaderFilterEmails.includes(option.value)),
     );
+
+    $effect(() => {
+        onsidebarState({
+            videoSearchOpen,
+            videoSearch,
+            uploaderFilterOpen,
+            uploaderFilterSearch,
+            uploaderFilterEmails,
+        });
+    });
 
     onMount(() => {
         const handleDocumentClick = (event: MouseEvent) => {

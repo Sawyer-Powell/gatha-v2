@@ -24,6 +24,13 @@
         video_frame_layout,
     } from "./workspace.css";
 
+    type PlaybackPatch = Partial<{
+        currentTime: number;
+        paused: boolean;
+        playbackRate: number;
+        duration: number;
+    }>;
+
     /*
      * Future WASM boundary:
      * - WASM-owned state/callbacks: upload/job status, prompt edits, retry,
@@ -38,6 +45,7 @@
         duration = $bindable(0),
         profileName,
         profileImageUrl,
+        onplayback,
         onupdate,
         onretryUpload,
         onconfigure,
@@ -50,6 +58,7 @@
         duration?: number;
         profileName: (email: string) => string;
         profileImageUrl: (email: string) => string;
+        onplayback: (patch: PlaybackPatch) => void;
         onupdate: (id: string, patch: Partial<VideoItem>) => void;
         onretryUpload: (video: VideoItem) => void;
         onconfigure: (video?: VideoItem) => void;
@@ -58,6 +67,10 @@
 
     let actionScroller = $state<HTMLElement>();
     let actionFeather = $state({ top: 0, bottom: 0 });
+
+    $effect(() => {
+        onplayback({ currentTime, paused, playbackRate, duration });
+    });
 
     $effect(() => {
         video.id;

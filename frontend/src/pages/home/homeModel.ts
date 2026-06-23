@@ -26,6 +26,12 @@ export interface VideoItem {
   estimatedTranscriptionCost?: string;
 }
 
+export interface TranscriptBlock {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export type AccountTab = "profile" | "organization" | "billing" | "contribute";
 export type BillingTab = "transcriptions" | "transactions";
 export type AccountRole = "admin" | "member";

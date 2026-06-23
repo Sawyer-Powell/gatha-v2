@@ -8,6 +8,7 @@
         mediaDuration?: number;
         active?: boolean;
         optionMode?: boolean;
+        ontext?: (text: string) => void;
         onseek?: (time: number) => void;
         onselect?: () => void;
     }
@@ -36,11 +37,12 @@
         index,
         start,
         end,
-        text = $bindable(""),
+        text,
         currentTime,
         mediaDuration = 0,
         active = false,
         optionMode = false,
+        ontext,
         onseek,
         onselect,
     }: TranscriptionBlockProps = $props();
@@ -124,9 +126,10 @@
         {#if active}
             <textarea
                 class="{transcription_text} {transcription_textarea}"
-                bind:value={text}
+                value={text}
                 aria-label={`Edit transcript block ${index}`}
                 rows="1"
+                oninput={(e) => ontext?.(e.currentTarget.value)}
             ></textarea>
         {:else}
             <p class={transcription_text}>{text}</p>

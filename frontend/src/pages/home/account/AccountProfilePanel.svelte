@@ -10,28 +10,31 @@
     } from "./account.css";
 
     let {
-        name = $bindable(""),
+        name,
         email,
         role,
         avatarUrl,
+        onname,
         onavatar,
     }: {
-        name?: string;
+        name: string;
         email: string;
         role: AccountRole;
         avatarUrl: string;
+        onname: (name: string) => void;
         onavatar: (files: FileList | null) => void;
     } = $props();
 
 </script>
 
 <AccountIdentityRow
-    bind:name
+    {name}
     subtitle={email}
     {role}
     editable
     ariaLabel="Edit profile name"
     placeholder="Your name"
+    {onname}
 >
     {#snippet media()}
         <FileUploadButton

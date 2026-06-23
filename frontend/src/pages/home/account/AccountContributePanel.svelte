@@ -12,14 +12,16 @@
 
     let {
         organizationName,
-        contributionAmount = $bindable(""),
+        contributionAmount,
         estimatedMinutes,
         formatMinuteEstimate,
+        oncontributionAmount,
     }: {
         organizationName: string;
-        contributionAmount?: string;
+        contributionAmount: string;
         estimatedMinutes: number;
         formatMinuteEstimate: (minutes: number) => string;
+        oncontributionAmount: (amount: string) => void;
     } = $props();
 </script>
 
@@ -36,7 +38,7 @@
                 variant="ghost"
                 shape="pill"
                 pressed={contributionAmount === amount}
-                onclick={() => (contributionAmount = amount)}
+                onclick={() => oncontributionAmount(amount)}
             >
                 ${amount}
             </Button>
@@ -47,7 +49,7 @@
         value={contributionAmount}
         placeholder="Amount in USD"
         ariaLabel="Contribution amount in USD"
-        oninput={(value) => (contributionAmount = value.replace(/[^\d.]/g, ""))}
+        oninput={(value) => oncontributionAmount(value.replace(/[^\d.]/g, ""))}
     />
     <AccountMetric
         label="Estimated transcription time"

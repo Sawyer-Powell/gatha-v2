@@ -12,7 +12,10 @@
         promptPresets,
         transcriptText,
         user,
+        type AccountTab,
+        type BillingTab,
         type OrgMember,
+        type TranscriptBlock,
         type VideoItem,
     } from "./homeModel";
     import {
@@ -29,55 +32,153 @@
         workspace_query_sidebar_open,
     } from "./workspace/workspace.css";
 
+    type HomeState = {
+        videos: VideoItem[];
+        selectedVideoId: string;
+        transcript: TranscriptBlock[];
+        playback: {
+            currentTime: number;
+            paused: boolean;
+            playbackRate: number;
+            duration: number;
+        };
+        sidebar: {
+            open: boolean;
+            animating: boolean;
+            videoSearchOpen: boolean;
+            videoSearch: string;
+            uploaderFilterOpen: boolean;
+            uploaderFilterSearch: string;
+            uploaderFilterEmails: string[];
+        };
+        transcriptUi: {
+            search: string;
+            blockDraft: string;
+            editingBlock: boolean;
+        };
+        account: {
+            modalOpen: boolean;
+            tab: AccountTab;
+            name: string;
+            avatarUrl: string;
+        };
+        organization: {
+            name: string;
+            logoUrl: string;
+            members: OrgMember[];
+        };
+        billing: {
+            tab: BillingTab;
+        };
+        contribution: {
+            amount: string;
+        };
+    };
+
     /*
      * Future WASM boundary:
-     * - WASM-owned state: videos, selectedVideoId, transcript blocks, account,
-     *   organization, billing, prompts, uploads, and transcription jobs.
-     * - WASM-driven callbacks: select/update video, upload/retry, configure/start
-     *   transcription, edit transcript/account/org fields, member/billing actions.
-     * - Local UI state only: element refs, popover/search visibility, scroll
-     *   feather measurements, modal/tab presentation, and transient input drafts.
+     * - `homeState` is the single app-store-shaped object for this route.
+     * - WASM should eventually own this object and expose reducer-style callbacks
+     *   for video selection, uploads/jobs, transcript/account/org edits, billing,
+     *   and contribution checkout state.
+     * - Leaf-local state should stay limited to DOM refs, scroll measurement,
+     *   focus/popover mechanics, and other non-persisted rendering details.
      */
-    let videos = $state<VideoItem[]>(initialVideos);
-    let transcript = $state(transcriptText.map((text, i) => ({
-        start: i,
-        end: i === transcriptText.length - 1 ? 5.1 : i + 1,
-        text,
-    })));
+    let homeState = $state<HomeState>({
+        videos: initialVideos,
+        selectedVideoId: initialVideos[0].id,
+        transcript: transcriptText.map((text, i) => ({
+            start: i,
+            end: i === transcriptText.length - 1 ? 5.1 : i + 1,
+            text,
+        })),
+        playback: {
+            currentTime: 0,
+            paused: true,
+            playbackRate: 1,
+            duration: 0,
+        },
+        sidebar: {
+            open: true,
+            animating: false,
+            videoSearchOpen: false,
+            videoSearch: "",
+            uploaderFilterOpen: false,
+            uploaderFilterSearch: "",
+            uploaderFilterEmails: [],
+        },
+        transcriptUi: {
+            search: "",
+            blockDraft: "1",
+            editingBlock: false,
+        },
+        account: {
+            modalOpen: false,
+            tab: "profile",
+            name: "Sawyer Powell",
+            avatarUrl: "",
+        },
+        organization: {
+            name: "US Zen",
+            logoUrl: "",
+            members: organization.members,
+        },
+        billing: {
+            tab: "transcriptions",
+        },
+        contribution: {
+            amount: "50",
+        },
+    });
 
-    let selectedVideoId = $state(initialVideos[0].id);
-    let sidebarOpen = $state(true);
-    let sidebarAnimating = $state(false);
-    let currentTime = $state(0);
-    let paused = $state(true);
-    let playbackRate = $state(1);
-    let duration = $state(0);
-    let accountModalOpen = $state(false);
-    let accountName = $state("Sawyer Powell");
-    let organizationName = $state("US Zen");
-    let organizationMemberState = $state<OrgMember[]>(organization.members);
-    let accountAvatarUrl = $state("");
-    let organizationLogoUrl = $state("");
-    const organizationMembers = $derived(organizationMemberState.map((member) =>
-        member.current ? { ...member, name: accountName } : member,
+    const organizationMembers = $derived(homeState.organization.members.map((member) =>
+        member.current ? { ...member, name: homeState.account.name } : member,
     ));
     const selectedVideo = $derived(
-        videos.find((video) => video.id === selectedVideoId) ?? videos[0],
+        homeState.videos.find((video) => video.id === homeState.selectedVideoId) ?? homeState.videos[0],
     );
-    const workspacePinned = $derived(sidebarOpen || sidebarAnimating);
+    const workspacePinned = $derived(homeState.sidebar.open || homeState.sidebar.animating);
+
+    function updatePlayback(patch: Partial<HomeState["playback"]>) {
+        for (const [key, value] of Object.entries(patch)) {
+            const field = key as keyof HomeState["playback"];
+            if (value !== undefined && !Object.is(homeState.playback[field], value)) {
+                homeState.playback[field] = value as never;
+            }
+        }
+    }
+
+    function updateSidebarState(patch: Partial<HomeState["sidebar"]>) {
+        for (const [key, value] of Object.entries(patch)) {
+            const field = key as keyof HomeState["sidebar"];
+            if (value !== undefined && !Object.is(homeState.sidebar[field], value)) {
+                homeState.sidebar[field] = value as never;
+            }
+        }
+    }
+
+    function updateTranscriptUi(patch: Partial<HomeState["transcriptUi"]>) {
+        for (const [key, value] of Object.entries(patch)) {
+            const field = key as keyof HomeState["transcriptUi"];
+            if (value !== undefined && !Object.is(homeState.transcriptUi[field], value)) {
+                homeState.transcriptUi[field] = value as never;
+            }
+        }
+    }
+
     function toggleSidebar() {
-        sidebarAnimating = true;
-        sidebarOpen = !sidebarOpen;
+        homeState.sidebar.animating = true;
+        homeState.sidebar.open = !homeState.sidebar.open;
     }
 
     function finishSidebarAnimation(e: TransitionEvent) {
         if (e.propertyName === "width") {
-            sidebarAnimating = false;
+            homeState.sidebar.animating = false;
         }
     }
 
     function updateVideo(id: string, patch: Partial<VideoItem>) {
-        videos = videos.map((video) => video.id === id ? { ...video, ...patch } : video);
+        homeState.videos = homeState.videos.map((video) => video.id === id ? { ...video, ...patch } : video);
     }
 
     function profileName(email: string) {
@@ -85,24 +186,30 @@
     }
 
     function profileImageUrl(email: string) {
-        return email === user.email ? accountAvatarUrl : "";
+        return email === user.email ? homeState.account.avatarUrl : "";
     }
 
     function selectVideo(video: VideoItem) {
-        selectedVideoId = video.id;
-        currentTime = 0;
-        paused = true;
+        homeState.selectedVideoId = video.id;
+        homeState.playback.currentTime = 0;
+        homeState.playback.paused = true;
     }
 
     function renameSelectedVideo(title: string) {
         updateVideo(selectedVideo.id, { title });
     }
 
+    function updateTranscriptBlockText(index: number, text: string) {
+        homeState.transcript = homeState.transcript.map((block, i) =>
+            i === index ? { ...block, text } : block,
+        );
+    }
+
     function openOrgTranscription(title: string) {
-        const video = videos.find((item) => item.title === title);
+        const video = homeState.videos.find((item) => item.title === title);
         if (!video) return;
         selectVideo(video);
-        accountModalOpen = false;
+        homeState.account.modalOpen = false;
     }
 
     function addUploads(files: FileList | null) {
@@ -119,14 +226,14 @@
             emailOnComplete: false,
             uploadedByEmail: user.email,
         }));
-        videos = [...created, ...videos];
-        selectedVideoId = created[0].id;
+        homeState.videos = [...created, ...homeState.videos];
+        homeState.selectedVideoId = created[0].id;
         created.forEach(simulateUpload);
     }
 
     function simulateUpload(video: VideoItem) {
         const timer = window.setInterval(() => {
-            const current = videos.find((item) => item.id === video.id);
+            const current = homeState.videos.find((item) => item.id === video.id);
             if (!current || current.status !== "uploading") return window.clearInterval(timer);
             const uploadProgress = Math.min(1, current.uploadProgress + 0.12);
             updateVideo(video.id, {
@@ -157,7 +264,7 @@
 
     function simulateTranscription(id: string) {
         const timer = window.setInterval(() => {
-            const current = videos.find((item) => item.id === id);
+            const current = homeState.videos.find((item) => item.id === id);
             if (!current || current.status !== "transcribing") return window.clearInterval(timer);
             const transcriptionProgress = Math.min(1, current.transcriptionProgress + 0.09);
             updateVideo(id, {
@@ -167,7 +274,7 @@
                     ? {
                         transcribedAt: "Just now",
                         transcribedByEmail: user.email,
-                        estimatedTranscriptionCost: estimatedCostLabel(duration || 5),
+                        estimatedTranscriptionCost: estimatedCostLabel(homeState.playback.duration || 5),
                     }
                     : {}),
             });
@@ -178,23 +285,23 @@
     function updateAccountAvatar(files: FileList | null) {
         const file = files?.[0];
         if (!file) return;
-        if (accountAvatarUrl) URL.revokeObjectURL(accountAvatarUrl);
-        accountAvatarUrl = URL.createObjectURL(file);
+        if (homeState.account.avatarUrl) URL.revokeObjectURL(homeState.account.avatarUrl);
+        homeState.account.avatarUrl = URL.createObjectURL(file);
     }
 
     function updateOrganizationLogo(files: FileList | null) {
         const file = files?.[0];
         if (!file) return;
-        if (organizationLogoUrl) URL.revokeObjectURL(organizationLogoUrl);
-        organizationLogoUrl = URL.createObjectURL(file);
+        if (homeState.organization.logoUrl) URL.revokeObjectURL(homeState.organization.logoUrl);
+        homeState.organization.logoUrl = URL.createObjectURL(file);
     }
 
     function removeOrganizationMember(email: string) {
-        organizationMemberState = organizationMemberState.filter((member) => member.email !== email);
+        homeState.organization.members = homeState.organization.members.filter((member) => member.email !== email);
     }
 
     function makeOrganizationAdmin(email: string) {
-        organizationMemberState = organizationMemberState.map((member) =>
+        homeState.organization.members = homeState.organization.members.map((member) =>
             member.email === email ? { ...member, role: "admin" } : member,
         );
     }
@@ -204,27 +311,33 @@
 <section class={home}>
     <div class="{homeWrapper} {homeWrapperWithControls}">
         <AppTopBar
-            {sidebarOpen}
+            sidebarOpen={homeState.sidebar.open}
             video={selectedVideo}
-            {accountName}
-            {accountAvatarUrl}
+            accountName={homeState.account.name}
+            accountAvatarUrl={homeState.account.avatarUrl}
             ontoggleSidebar={toggleSidebar}
             onrenameVideo={renameSelectedVideo}
-            onopenAccount={() => (accountModalOpen = true)}
+            onopenAccount={() => (homeState.account.modalOpen = true)}
         />
 
         <HStack
             justify="between"
             align="stretch"
-            classname="{hstack} {sidebarOpen ? '' : hstack_sidebar_closed}"
+            classname="{hstack} {homeState.sidebar.open ? '' : hstack_sidebar_closed}"
         >
             <VideoSidebar
-                {videos}
+                videos={homeState.videos}
                 members={organizationMembers}
-                {selectedVideoId}
-                open={sidebarOpen}
+                selectedVideoId={homeState.selectedVideoId}
+                open={homeState.sidebar.open}
                 {profileName}
                 {profileImageUrl}
+                videoSearchOpen={homeState.sidebar.videoSearchOpen}
+                videoSearch={homeState.sidebar.videoSearch}
+                uploaderFilterOpen={homeState.sidebar.uploaderFilterOpen}
+                uploaderFilterSearch={homeState.sidebar.uploaderFilterSearch}
+                uploaderFilterEmails={homeState.sidebar.uploaderFilterEmails}
+                onsidebarState={updateSidebarState}
                 onselect={selectVideo}
                 onfiles={addUploads}
                 ontransitionend={finishSidebarAnimation}
@@ -235,23 +348,30 @@
                         {#if selectedVideo.status === "ready"}
                             <ReadyVideoWorkspace
                                 video={selectedVideo}
-                                {transcript}
-                                bind:currentTime
-                                bind:paused
-                                bind:playbackRate
-                                bind:duration
+                                transcript={homeState.transcript}
+                                currentTime={homeState.playback.currentTime}
+                                paused={homeState.playback.paused}
+                                playbackRate={homeState.playback.playbackRate}
+                                duration={homeState.playback.duration}
+                                transcriptSearch={homeState.transcriptUi.search}
+                                transcriptBlockDraft={homeState.transcriptUi.blockDraft}
+                                editingTranscriptBlock={homeState.transcriptUi.editingBlock}
                                 {profileName}
                                 {profileImageUrl}
+                                onplayback={updatePlayback}
+                                ontranscriptUi={updateTranscriptUi}
+                                ontranscriptText={updateTranscriptBlockText}
                             />
                         {:else}
                             <VideoActionPanel
                                 video={selectedVideo}
-                                bind:currentTime
-                                bind:paused
-                                bind:playbackRate
-                                bind:duration
+                                currentTime={homeState.playback.currentTime}
+                                paused={homeState.playback.paused}
+                                playbackRate={homeState.playback.playbackRate}
+                                duration={homeState.playback.duration}
                                 {profileName}
                                 {profileImageUrl}
+                                onplayback={updatePlayback}
                                 onupdate={updateVideo}
                                 onretryUpload={retryUpload}
                                 onconfigure={configureTranscription}
@@ -263,13 +383,21 @@
             </div></HStack
         >
         <AccountModal
-            open={accountModalOpen}
-            bind:accountName
-            bind:organizationName
+            open={homeState.account.modalOpen}
+            accountName={homeState.account.name}
+            organizationName={homeState.organization.name}
+            accountTab={homeState.account.tab}
+            billingTab={homeState.billing.tab}
+            contributionAmount={homeState.contribution.amount}
             {organizationMembers}
-            {accountAvatarUrl}
-            {organizationLogoUrl}
-            onclose={() => (accountModalOpen = false)}
+            accountAvatarUrl={homeState.account.avatarUrl}
+            organizationLogoUrl={homeState.organization.logoUrl}
+            onclose={() => (homeState.account.modalOpen = false)}
+            onaccountName={(name) => (homeState.account.name = name)}
+            onorganizationName={(name) => (homeState.organization.name = name)}
+            onaccountTab={(tab) => (homeState.account.tab = tab)}
+            onbillingTab={(tab) => (homeState.billing.tab = tab)}
+            oncontributionAmount={(amount) => (homeState.contribution.amount = amount)}
             onavatar={updateAccountAvatar}
             onlogo={updateOrganizationLogo}
             onremoveMember={removeOrganizationMember}

@@ -6,7 +6,7 @@
     import { MagnifyingGlass } from "phosphor-svelte";
     import TranscriptionBlock from "./TranscriptionBlock.svelte";
     import VideoMeta from "./VideoMeta.svelte";
-    import { formatTranscriptTime, type VideoItem } from "../homeModel";
+    import { formatTranscriptTime, type TranscriptBlock, type VideoItem } from "../homeModel";
     import {
         contentWrapper,
         transcription_focus_count,
@@ -21,18 +21,24 @@
         video_stage,
     } from "./workspace.css";
 
-    type TranscriptBlock = {
-        start: number;
-        end: number;
-        text: string;
-    };
+    type PlaybackPatch = Partial<{
+        currentTime: number;
+        paused: boolean;
+        playbackRate: number;
+        duration: number;
+    }>;
+
+    type TranscriptUiPatch = Partial<{
+        search: string;
+        blockDraft: string;
+        editingBlock: boolean;
+    }>;
 
     /*
      * Future WASM boundary:
      * - WASM-owned state/callbacks: video, transcript blocks, transcript edits,
-     *   selected playback block, and persisted playback/selection state if desired.
-     * - Local UI state: transcript search text, block number draft, element refs,
-     *   and scroll feather measurement.
+     *   selected playback block, playback state, and transcript toolbar state.
+     * - Local UI state: element refs and scroll feather measurement.
      */
     let {
         video,
@@ -41,8 +47,14 @@
         paused = $bindable(true),
         playbackRate = $bindable(1),
         duration = $bindable(0),
+        transcriptSearch = $bindable(""),
+        transcriptBlockDraft = $bindable("1"),
+        editingTranscriptBlock = $bindable(false),
         profileName,
         profileImageUrl,
+        onplayback,
+        ontranscriptUi,
+        ontranscriptText,
     }: {
         video: VideoItem;
         transcript: TranscriptBlock[];
@@ -50,15 +62,18 @@
         paused?: boolean;
         playbackRate?: number;
         duration?: number;
+        transcriptSearch?: string;
+        transcriptBlockDraft?: string;
+        editingTranscriptBlock?: boolean;
         profileName: (email: string) => string;
         profileImageUrl: (email: string) => string;
+        onplayback: (patch: PlaybackPatch) => void;
+        ontranscriptUi: (patch: TranscriptUiPatch) => void;
+        ontranscriptText: (index: number, text: string) => void;
     } = $props();
 
     let transcriptSearchInput = $state<HTMLInputElement>();
     let transcriptScroller = $state<HTMLElement>();
-    let transcriptSearch = $state("");
-    let transcriptBlockDraft = $state("1");
-    let editingTranscriptBlock = $state(false);
     let transcriptFeather = $state({ top: 0, bottom: 0 });
 
     const activeTranscriptIndex = $derived.by(() => {
@@ -81,6 +96,18 @@
             ? filteredTranscript
             : transcript.map((block, index) => ({ block, index })),
     );
+
+    $effect(() => {
+        onplayback({ currentTime, paused, playbackRate, duration });
+    });
+
+    $effect(() => {
+        ontranscriptUi({
+            search: transcriptSearch,
+            blockDraft: transcriptBlockDraft,
+            editingBlock: editingTranscriptBlock,
+        });
+    });
 
     $effect(() => {
         video.id;
@@ -241,12 +268,13 @@
                     currentTime={currentTime}
                     start={item.block.start}
                     end={item.block.end}
+                    text={item.block.text}
                     mediaDuration={duration}
                     active={item.index === activeTranscriptIndex}
                     optionMode={transcriptSearchActive}
                     onseek={(time) => (currentTime = time)}
                     onselect={() => confirmTranscriptSearch(item.index)}
-                    bind:text={item.block.text}
+                    ontext={(text) => ontranscriptText(item.index, text)}
                 />
             {/each}
         </div>

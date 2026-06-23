@@ -6,18 +6,20 @@
     import { account_billing_grid, account_table_tabs } from "./account.css";
 
     let {
-        tab = $bindable<BillingTab>("transcriptions"),
+        tab,
         predicted,
         actual,
         transcriptions,
         transactions,
+        ontab,
         onopenTranscription,
     }: {
-        tab?: BillingTab;
+        tab: BillingTab;
         predicted: string;
         actual: string;
         transcriptions: string[][];
         transactions: string[][];
+        ontab: (tab: BillingTab) => void;
         onopenTranscription: (title: string) => void;
     } = $props();
 </script>
@@ -31,8 +33,8 @@
     <AccountMetric label="Account balance" value={actual} />
 </div>
 <div class={account_table_tabs}>
-    <Button variant="ghost" shape="pill" pressed={tab === "transcriptions"} onclick={() => (tab = "transcriptions")}>Transcriptions</Button>
-    <Button variant="ghost" shape="pill" pressed={tab === "transactions"} onclick={() => (tab = "transactions")}>Transactions</Button>
+    <Button variant="ghost" shape="pill" pressed={tab === "transcriptions"} onclick={() => ontab("transcriptions")}>Transcriptions</Button>
+    <Button variant="ghost" shape="pill" pressed={tab === "transactions"} onclick={() => ontab("transactions")}>Transactions</Button>
 </div>
 <AccountBillingTable
     {tab}

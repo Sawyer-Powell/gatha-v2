@@ -29,17 +29,24 @@
      *   records, and contribution checkout state.
      * - WASM-driven callbacks: profile/org edits, avatar/logo updates, member
      *   actions, opening a transcription from billing, and checkout creation.
-     * - Local UI state only: active modal tab and table tab until route/server
-     *   state needs to preserve them.
+     * - Local UI state only: modal focus/DOM mechanics owned by Modal itself.
      */
     let {
         open,
-        accountName = $bindable(""),
-        organizationName = $bindable(""),
+        accountName,
+        organizationName,
+        accountTab,
+        billingTab,
+        contributionAmount,
         organizationMembers,
         accountAvatarUrl,
         organizationLogoUrl,
         onclose,
+        onaccountName,
+        onorganizationName,
+        onaccountTab,
+        onbillingTab,
+        oncontributionAmount,
         onavatar,
         onlogo,
         onremoveMember,
@@ -47,22 +54,26 @@
         onopenTranscription,
     }: {
         open: boolean;
-        accountName?: string;
-        organizationName?: string;
+        accountName: string;
+        organizationName: string;
+        accountTab: AccountTab;
+        billingTab: BillingTab;
+        contributionAmount: string;
         organizationMembers: OrgMember[];
         accountAvatarUrl: string;
         organizationLogoUrl: string;
         onclose: () => void;
+        onaccountName: (name: string) => void;
+        onorganizationName: (name: string) => void;
+        onaccountTab: (tab: AccountTab) => void;
+        onbillingTab: (tab: BillingTab) => void;
+        oncontributionAmount: (amount: string) => void;
         onavatar: (files: FileList | null) => void;
         onlogo: (files: FileList | null) => void;
         onremoveMember: (email: string) => void;
         onmakeAdmin: (email: string) => void;
         onopenTranscription: (title: string) => void;
     } = $props();
-
-    let accountTab = $state<AccountTab>("profile");
-    let billingTab = $state<BillingTab>("transcriptions");
-    let contributionAmount = $state("50");
 
     const contributionEstimateMinutes = $derived.by(() =>
         Math.floor(Math.max(0, Number.parseFloat(contributionAmount) || 0) / GEMINI_TRANSCRIPTION_COST_PER_MINUTE),
@@ -89,7 +100,7 @@
     ariaLabelledby="account-modal-title"
     {onclose}
 >
-    <AccountTabList value={accountTab} onchange={(tab) => (accountTab = tab)} />
+    <AccountTabList value={accountTab} onchange={onaccountTab} />
     <section class={account_modal_body}>
         <div class={account_modal_header}>
             <h2 id="account-modal-title" class={account_modal_title}>
@@ -102,38 +113,42 @@
 
         {#if accountTab === "profile"}
             <AccountProfilePanel
-                bind:name={accountName}
+                name={accountName}
                 email={user.email}
                 role={user.role}
                 avatarUrl={accountAvatarUrl}
+                onname={onaccountName}
                 onavatar={onavatar}
             />
         {:else if accountTab === "organization"}
             <AccountOrganizationPanel
-                bind:name={organizationName}
+                name={organizationName}
                 logo={organization.logo}
                 logoUrl={organizationLogoUrl}
                 members={organizationMembers}
                 avatarUrl={accountAvatarUrl}
+                onname={onorganizationName}
                 onlogo={onlogo}
                 onremove={onremoveMember}
                 onmakeAdmin={onmakeAdmin}
             />
         {:else if accountTab === "billing"}
             <AccountBillingPanel
-                bind:tab={billingTab}
+                tab={billingTab}
                 predicted={billing.predicted}
                 actual={billing.actual}
                 transcriptions={billing.transcriptions}
                 transactions={billing.transactions}
+                ontab={onbillingTab}
                 onopenTranscription={onopenTranscription}
             />
         {:else}
             <AccountContributePanel
                 {organizationName}
-                bind:contributionAmount
+                {contributionAmount}
                 estimatedMinutes={contributionEstimateMinutes}
                 {formatMinuteEstimate}
+                oncontributionAmount={oncontributionAmount}
             />
         {/if}
     </section>

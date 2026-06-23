@@ -13,20 +13,22 @@
     } from "./account.css";
 
     let {
-        name = $bindable(""),
+        name,
         logo,
         logoUrl,
         members,
         avatarUrl,
+        onname,
         onlogo,
         onremove,
         onmakeAdmin,
     }: {
-        name?: string;
+        name: string;
         logo: string;
         logoUrl: string;
         members: OrgMember[];
         avatarUrl: string;
+        onname: (name: string) => void;
         onlogo: (files: FileList | null) => void;
         onremove: (email: string) => void;
         onmakeAdmin: (email: string) => void;
@@ -35,11 +37,12 @@
 </script>
 
 <AccountIdentityRow
-    bind:name
+    {name}
     subtitle={`${members.length} members`}
     editable
     ariaLabel="Edit organization name"
     placeholder="Organization name"
+    {onname}
 >
     {#snippet media()}
         <FileUploadButton

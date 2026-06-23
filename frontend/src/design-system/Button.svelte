@@ -26,7 +26,7 @@
         disabled?: boolean;
         ariaLabel?: string;
         classname?: string;
-        onclick?: () => void;
+        onclick?: (event: MouseEvent) => void;
         onkeydown?: (event: KeyboardEvent) => void;
         children: Snippet;
     } = $props();
@@ -46,7 +46,7 @@
     aria-busy={loading}
     disabled={disabled || loading}
     {onclick}
-    {onkeydown}
+    onkeydown={(event) => onkeydown?.(event)}
 >
     {@render children()}
 </button>

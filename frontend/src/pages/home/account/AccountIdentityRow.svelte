@@ -15,22 +15,24 @@
     } from "./account.css";
 
     let {
-        name = $bindable(""),
+        name,
         subtitle,
         role = undefined,
         editable = false,
         ariaLabel = "Edit name",
         placeholder = "Name",
+        onname,
         media,
         actions,
         children: _children,
     }: {
-        name?: string;
+        name: string;
         subtitle: string;
         role?: AccountRole;
         editable?: boolean;
         ariaLabel?: string;
         placeholder?: string;
+        onname?: (name: string) => void;
         media?: Snippet;
         actions?: Snippet;
         children?: Snippet;
@@ -47,9 +49,10 @@
                 <span class={account_profile_name_wrap}>
                     <EditableText
                         classname="{account_section_title} {account_profile_name_input}"
-                        bind:value={name}
+                        value={name}
                         {ariaLabel}
                         {placeholder}
+                        oninput={onname}
                     />
                 </span>
             {:else}
