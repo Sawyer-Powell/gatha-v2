@@ -2,16 +2,4 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$repo_root"
-
-# Preserve any local environment configuration; initialize new worktrees from
-# the repository's documented defaults.
-if [ ! -e .env ]; then
-    cp .env.example .env
-fi
-
-# make dev invokes these tools directly. npm ci is lockfile-based and skipped
-# when dependencies are already installed.
-if [ ! -d frontend/node_modules ]; then
-    (cd frontend && npm ci --no-audit --no-fund)
-fi
+exec "$repo_root/scripts/dev-setup.sh"
